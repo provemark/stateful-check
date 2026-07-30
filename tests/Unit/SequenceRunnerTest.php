@@ -35,6 +35,7 @@ final class SpyCommand implements Command
     public function __construct(
         private string $label,
         private CallLog $log,
+        private bool $preconditionHolds = true,
         private bool $postconditionHolds = true,
     ) {}
 
@@ -42,7 +43,7 @@ final class SpyCommand implements Command
     {
         $this->log->record($this->label, 'pre', $model);
 
-        return true;
+        return $this->preconditionHolds;
     }
 
     public function run(mixed $sut): mixed
@@ -169,4 +170,45 @@ it('stops at the first failing postcondition and reports a structured failure', 
     // modelBefore and modelAfter must visibly differ, or "filled correctly" cannot be told
     // apart from "handed the same value twice". At b the model enters as 1; nextState makes
     // it 2, and the failing postcondition is checked against that 2.
+})->group('SPEC-001');
+
+it('skips a command whose precondition is false and continues the sequence', function () {
+    $log = new CallLog;
+    $commands = [
+        new SpyCommand('a', $log),
+        new SpyCommand('b', $log, preconditionHolds: false),
+        new SpyCommand('c', $log),
+    ];
+
+    $result = (new SequenceRunner)->run($commands, fn () => new stdClass, 0);
+
+    // Skipping is not a failure, and the run continues past the skipped middle command.
+    expect($result->passed)->toBeTrue()
+        ->and($result->failure)->toBeNull()
+        ->and($result->executed)->toBe([true, false, true]);
+
+    // The discriminator is not executed[1] === false — a runner could set that while still
+    // running b. It is that b's run/nextState/postCondition never fired: b contributes only
+    // its precondition event to the log. (The runner does call preCondition, to decide.)
+    $trace = array_map(fn (array $e): string => "{$e[0]}.{$e[1]}", $log->events);
+    expect($trace)->toBe([
+        'a.pre', 'a.run', 'a.next', 'a.post',
+        'b.pre',
+        'c.pre', 'c.run', 'c.next', 'c.post',
+    ])
+        ->and(array_filter($log->events, fn (array $e): bool => $e[0] === 'b' && $e[1] !== 'pre'))->toBe([]);
+
+    // The model must not advance over a skipped command: had b's nextState wrongly run, c
+    // would see 2, and every later postcondition would fail for the wrong reason (the hazard
+    // in the design notes). c seeing the un-advanced 1 is the only external pin on that.
+    $modelOf = function (string $label, string $method) use ($log): int {
+        foreach ($log->events as [$l, $m, $model]) {
+            if ($l === $label && $m === $method && $model !== null) {
+                return $model;
+            }
+        }
+        throw new RuntimeException("no model logged for {$label}.{$method}");
+    };
+    expect($modelOf('a', 'post'))->toBe(1)
+        ->and($modelOf('c', 'pre'))->toBe(1);
 })->group('SPEC-001');

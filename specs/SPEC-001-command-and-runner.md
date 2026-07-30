@@ -398,7 +398,7 @@ least one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | tests/Unit/SequenceRunnerTest.php :: "runs a passing sequence to completion…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC2                  | tests/Unit/SequenceRunnerTest.php :: "stops at the first failing postcondition…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run; src/Failure.php; src/FailureKind.php; src/RunResult.php |
-| AC3                  | —                           | —                    |
+| AC3                  | tests/Unit/SequenceRunnerTest.php :: "skips a command whose precondition is false…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC4                  | —                           | —                    |
 | AC5                  | —                           | —                    |
 | AC6                  | —                           | —                    |

@@ -32,8 +32,16 @@ final class SequenceRunner
         $executed = [];
 
         foreach ($commands as $command) {
-            // Acting on a false precondition (skip the command) is AC3.
-            $command->preCondition($model);
+            if (! $command->preCondition($model)) {
+                // Precondition false: skip. run()/nextState() never run, the model does not
+                // advance, and the run does not fail (AC3). This is what keeps R1 sound — a
+                // shortened sequence cannot be ill-formed, because commands that no longer
+                // apply are simply skipped. The false position is kept so `executed` stays
+                // index-aligned with $commands.
+                $executed[] = false;
+
+                continue;
+            }
 
             $outcome = Outcome::returned($command->run($sut));
             $modelBefore = $model;

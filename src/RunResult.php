@@ -11,6 +11,12 @@ namespace Provemark\StatefulCheck;
  * AC4), and — on failure — a structured `Failure` plus the model on either side of the
  * failing transition.
  *
+ * A false in `executed` has two causes this type deliberately does not distinguish: the
+ * command was skipped by a false precondition (AC3), or it was never reached because the run
+ * stopped at an earlier failure (AC2). SPEC-002 does not need the difference — both fall out
+ * of the shrink representation identically — but a diagnostic reader cannot tell them apart,
+ * so the merge is stated here rather than left to be assumed away.
+ *
  * `modelBefore` and `modelAfter` are failure diagnostics: they pin the transition at the
  * failing command (`modelBefore` is the model entering it, `modelAfter` the model after its
  * `nextState`). On a passing run there is no distinguished transition to point at — there
