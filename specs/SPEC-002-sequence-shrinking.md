@@ -5,6 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-30                               |
+| Amended    | maurice, 2026-07-30 — `SequenceShrinker::shrink()` takes the original failing `RunResult`. It makes the shrinker a consumer of what already happened, not a rediscoverer: `$original->executed` filters non-executed commands with **zero** candidate runs (AC3), the execution path is AC8's replay baseline, and `$original->failure` is the `sameKindAs` baseline for the AC1 invariant. `count($original->executed)` must equal `count($failing)` (the same run) or `shrink()` throws a `LogicException` — a length mismatch would filter wrong positions and silently return a wrong counterexample. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -209,12 +210,20 @@ final class SequenceShrinker
 
     /**
      * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $failing   the generated sequence, with contexts
+     * @param  RunResult                                           $original  the failing run SPEC-005 already produced;
+     *   it supplies three things and makes the shrinker a consumer of what happened rather than a
+     *   rediscoverer of it: `executed` filters non-executed commands with no candidate run (AC3),
+     *   the execution path is the baseline AC8 replays against, and `Failure` is the `sameKindAs`
+     *   baseline the AC1 invariant checks each candidate against. `count($original->executed)`
+     *   must equal `count($failing)` — they must be the same run — or `shrink()` throws a
+     *   `LogicException`; a length mismatch would filter the wrong positions and silently return a
+     *   wrong counterexample (the same silent class as the generators' context guards)
      * @param  Generator<Command<TModel, TSut, mixed>>             $alphabet  the generator, for family-3 argument shrinking
      * @param  callable(): TSut                                    $freshSut
      * @param  TModel                                              $initialModel
      * @return ShrinkResult<TModel, TSut>
      */
-    public function shrink(array $failing, Generator $alphabet, callable $freshSut, mixed $initialModel): ShrinkResult;
+    public function shrink(array $failing, RunResult $original, Generator $alphabet, callable $freshSut, mixed $initialModel): ShrinkResult;
 }
 
 /**
@@ -280,7 +289,7 @@ least one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | cross-cutting invariant (R2) — asserted in every shrinker test and proven by AC7; row lists the covering tests once they exist | the R2 postcondition, not a distinct symbol |
 | AC2                  | —                           | —                    |
-| AC3                  | —                           | —                    |
+| AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops skipped and never-reached commands…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
 | AC4                  | —                           | —                    |
 | AC5                  | —                           | —                    |
 | AC6                  | —                           | —                    |
