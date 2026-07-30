@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Provemark\StatefulCheck\Command;
+use Provemark\StatefulCheck\Failure;
+use Provemark\StatefulCheck\FailureKind;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\SequenceRunner;
 
@@ -34,6 +36,7 @@ final class SpyCommand implements Command
     public function __construct(
         private string $label,
         private CallLog $log,
+        private bool $postconditionHolds = true,
     ) {}
 
     public function preCondition(mixed $model): bool
@@ -67,7 +70,7 @@ final class SpyCommand implements Command
     {
         $this->log->record($this->label, 'post', $model);
 
-        return true;
+        return $this->postconditionHolds;
     }
 
     public function __toString(): string
@@ -123,4 +126,48 @@ it('nextState is deterministic in the model: the same model in gives the same mo
 
     expect($probe->nextState(7))->toBe(8)
         ->and($probe->nextState(7))->toBe(8);
+})->group('SPEC-001');
+
+it('stops at the first failing postcondition and reports a structured failure', function () {
+    $log = new CallLog;
+    $commands = [
+        new SpyCommand('a', $log),
+        new SpyCommand('b', $log, postconditionHolds: false),
+        new SpyCommand('c', $log),
+    ];
+
+    $result = (new SequenceRunner)->run($commands, fn () => new stdClass, 0);
+
+    expect($result->passed)->toBeFalse()
+        ->and($result->executed)->toBe([true, true, false]);
+
+    // The discriminator is that the run STOPPED, not merely that it failed. executed could
+    // be set administratively while the runner looped on to the end; the absence of any
+    // event for 'c' is what actually proves nothing past the failing position ran.
+    $trace = array_map(fn (array $e): string => "{$e[0]}.{$e[1]}", $log->events);
+    expect($trace)->toBe([
+        'a.pre', 'a.run', 'a.next', 'a.post',
+        'b.pre', 'b.run', 'b.next', 'b.post',
+    ])
+        ->and(array_filter($log->events, fn (array $e): bool => $e[0] === 'c'))->toBe([]);
+
+    // The precedence rule speaks here for the first time instead of being a tautology:
+    // run() returned normally, so kind is PostconditionFalse and exceptionClass is null.
+    // The throw path (AC6) is the case that would make both differ.
+    $failure = $result->failure;
+    expect($failure)->not->toBeNull();
+    if (! $failure instanceof Failure) {
+        return; // unreachable: the assertion above fails the test first. Narrows for PHPStan.
+    }
+    expect($failure->kind)->toBe(FailureKind::PostconditionFalse)
+        ->and($failure->index)->toBe(1)
+        ->and($failure->commandClass)->toBe(SpyCommand::class)
+        ->and($failure->exceptionClass)->toBeNull()
+        ->and($result->modelBefore)->toBe(1)
+        ->and($result->modelAfter)->toBe(2)
+        ->and($result->modelBefore)->not->toBe($result->modelAfter);
+
+    // modelBefore and modelAfter must visibly differ, or "filled correctly" cannot be told
+    // apart from "handed the same value twice". At b the model enters as 1; nextState makes
+    // it 2, and the failing postcondition is checked against that 2.
 })->group('SPEC-001');

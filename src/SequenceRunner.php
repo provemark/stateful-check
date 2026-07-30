@@ -36,12 +36,22 @@ final class SequenceRunner
             $command->preCondition($model);
 
             $outcome = Outcome::returned($command->run($sut));
+            $modelBefore = $model;
             $model = $command->nextState($model);
-
-            // Acting on a false postcondition (stop with a structured failure) is AC2.
-            $command->postCondition($model, $sut, $outcome);
-
             $executed[] = true;
+
+            if (! $command->postCondition($model, $sut, $outcome)) {
+                // run() returned normally, so by the precedence rule (AC2) the kind is
+                // PostconditionFalse; the throw path (UnexpectedException) is AC6.
+                $failure = new Failure(FailureKind::PostconditionFalse, count($executed) - 1, $command::class);
+
+                // Commands after the stop never ran.
+                while (count($executed) < count($commands)) {
+                    $executed[] = false;
+                }
+
+                return new RunResult(false, $executed, $failure, $modelBefore, $model);
+            }
         }
 
         return new RunResult(true, $executed);
