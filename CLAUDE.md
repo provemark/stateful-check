@@ -1,6 +1,8 @@
 # CLAUDE.md — stateful-check
 
-Local project instructions. Not published (gitignored).
+Project instructions, tracked in the repo. §3's R1–R10 are architecture rules that
+follow from prior-art research and from two real defects (D017, D019); the rest of the
+codebase does not read without them, so this file is not local scratch.
 
 **Package:** `provemark/stateful-check` — namespace `Provemark\StatefulCheck\`
 Model-based (stateful) property testing for PHP: generate command sequences,
@@ -164,6 +166,17 @@ carries leaks between candidates and destroys reproducibility.
   `__clone`. There is no opt-in `Cloneable` interface: opt-in fails silently, and
   a silently-unreliable shrinker is exactly what this package exists to prevent.
   This diverges from fast-check, which clones only when the command supports it.
+
+**R10 — A generic-typed contract is proven heterogeneous before its spec is approved.**
+Before a spec that introduces a `@template` type is approved, verify statically that
+a *heterogeneous* list of that type type-checks under PHPStan max — a throwaway file
+holding e.g. `list<Command<M, S, mixed>> = [$a, $b]` at two different type arguments,
+run through `phpstan analyse --level=max`, then deleted, never committed. This is the
+"Step-18 tell" made a gate: an invariant `@template` reads fine in isolation and only
+fails when something composes instances at different arguments — exactly what a
+command alphabet or a generator set does. The gate is cheap and has already caught the
+same defect twice, on `Generator` (D017) and `Command` (D019), each after the spec was
+approved. Catch it before, not after.
 
 ## 4. Scope discipline
 

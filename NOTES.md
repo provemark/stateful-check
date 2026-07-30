@@ -682,3 +682,9 @@ After the fix: project `composer check` green (34 pass), and the throwaway re-ra
 (`[OK] No errors`) — the heterogeneous alphabet now type-checks. Throwaway deleted, not
 committed. SPEC-001 amended and re-approved (header + D019, referencing D017 as precedent).
 
+Repo hygiene (deliberate, no D-number): `CLAUDE.md` is now tracked, and its stale "Not
+published (gitignored)" header line is removed — it was never actually in `.gitignore`. The
+§3 rules R1–R10 are architecture, not local scratch; losing them on a clean clone would make
+the repo unreadable. R10 (the heterogeneous-generics gate, from the D017/D019 pattern) is
+committed with this change.
+
