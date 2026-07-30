@@ -178,6 +178,19 @@ command alphabet or a generator set does. The gate is cheap and has already caug
 same defect twice, on `Generator` (D017) and `Command` (D019), each after the spec was
 approved. Catch it before, not after.
 
+**R11 — An acceptance criterion is proven fulfillable before its spec is approved.**
+Before a spec is approved, check each AC on two counts. (a) *A path exists to fulfil its
+promise*: the contract has a channel that can actually produce what the AC's Then requires.
+(b) *Its trigger is reachable*: the AC's Given can actually occur in the model. An AC that
+fails (a) promises an output nothing can supply; one that fails (b) specifies a branch whose
+condition cannot occur. Both are impossible to fulfil and, by R8, impossible to meta-test — a
+dead clause dressed as a requirement. This gate has caught the same defect twice: `Failure::$reason`
+promised a value `postCondition` (returning `bool`) has no channel to supply — fails (a); SPEC-002's
+empty-sequence probe promised a failure the runner cannot produce at zero commands — fails (b),
+removed as D022. Run it at approval, cheaply, per AC — it is the pre-approval half of the three-sided
+traceability check (every AC a path, every deliverable an AC, every scope item a deliverable) that
+otherwise only runs at `implemented`.
+
 ## 4. Scope discipline
 
 v0.1 is: `Command` contract, model-driven sequential runner, sequence shrinking,
