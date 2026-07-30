@@ -92,3 +92,10 @@ All notable changes to this project are documented here. Format follows
   footgun with it. The Problem section's claim that the suites build strings with
   `map`/`vector` was corrected; the ports falsified it. Example 1's `oneOf` folded
   into a single `elements`.
+- SPEC-003 AC3 broadened (amendment): it now covers `elements`, `map` and
+  `associative` — `elements` shrinks its index toward zero, which is delegation to an
+  underlying `integers()`, and is the first place a `GeneratedValue` context becomes
+  tangible; `constant` is its degenerate edge case. The audit had narrowed AC3 to the
+  user-facing `map`/`associative`; the mechanism includes `elements`. Recorded that
+  the ordering of `elements` is semantic: it shrinks toward the first element, so the
+  simplest value belongs first.

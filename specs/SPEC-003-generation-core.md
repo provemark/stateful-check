@@ -5,7 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-30                               |
-| Amended    | maurice, 2026-07-30 — combinator scope narrowed after the dogfood-example audit (`bool`, `oneOf`, `filter`, `tuple`, `vector` removed) |
+| Amended    | maurice, 2026-07-30 — combinator scope narrowed after the dogfood-example audit (`bool`, `oneOf`, `filter`, `tuple`, `vector` removed); AC3 broadened to cover `elements` (index-zero shrink), with `constant` as its degenerate edge case. Both are audit findings recorded before implementation. |
 | Supersedes | — (replaces the earlier draft "Generator port and Eris adapter") |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -34,9 +34,12 @@ interfere.
 
 What remains to build is smaller than it looks. One integer generator with sound
 shrinking, plus a few combinators. That is the classic QuickCheck observation: good
-integer shrinking composes into almost everything else. `elements` is a shrinking
-index into an array — so it shrinks toward the first element for free. `map` passes
-shrinking through to its part; `associative` shrinks a keyed bundle of generators.
+integer shrinking composes into almost everything else. `elements` shrinks its index
+toward zero, so it shrinks toward the **first element** — that order is therefore
+semantic: put the simplest or most ordinary value first, because counterexamples
+reduce toward it, and a surprising first element yields counterexamples that read as
+noise. (Repeated in the `elements` docblock when it is built.) `map` passes shrinking
+through to its part; `associative` shrinks a keyed bundle of generators.
 
 The combinator set was audited against the two dogfood examples once they existed
 (2026-07-30) and cut to exactly what they use: `constant`, `elements`, `map`,
@@ -112,10 +115,15 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
     a number of steps logarithmic in the distance, and terminates.
 
 - **AC3 — combinators delegate shrinking to their parts**
-  - Given a value from `map` or `associative`
+  - Given a value from `elements`, `map` or `associative`
   - When it is shrunk
   - Then the candidates are derived by shrinking the underlying parts, and each
     candidate carries a context that permits further shrinking.
+  - *`elements` is the first place the context becomes tangible (Step 12): it shrinks
+    the chosen index toward zero through an underlying `integers()`, so its context is
+    that index's generated value. `map` and `associative` delegate to their inner
+    generator(s). `constant` is the degenerate case — one value, no shrinking, an
+    empty candidate list — covered here as an edge case, not as its own criterion.*
 
 - **AC4 — sequence length is generated and shrinkable**
   - Given a maximum length *n*

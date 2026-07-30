@@ -84,8 +84,9 @@ order, since each step is used by the next:
 2. `integers()` with shrinking toward an origin (AC2). **This is the crux.**
    Every other generator's shrinking derives from it; get it right before
    composing anything on top.
-3. `constant`, `elements` — direct uses of the above.
-4. `map`, `associative` — delegation (AC3).
+3. `constant` (degenerate: one value, no shrinking) and `elements`, which shrinks its
+   index toward zero via `integers()` — so `elements` is the first case of AC3.
+4. `map`, `associative` — the rest of AC3 (delegation).
 5. Sequence-length generator (AC4).
 
 `bool`, `oneOf`, `filter`, `tuple`, `vector` were removed from scope by the
