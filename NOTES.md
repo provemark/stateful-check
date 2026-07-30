@@ -516,5 +516,27 @@ Two smaller `elements` behaviours settled with it, no decision-log entry because
 neither has a real alternative: it normalizes non-list arrays with `array_values`
 (keys dropped, order the only meaning), and it throws on an empty array.
 
-## Step 15 —
+## Step 15 — the second half of the opaque-context price, and a redundancy the mutation found (2026-07-30)
+
+Two refinements to `elements`, both surfaced by the mutation check.
+
+**The mutation found `array_values` was dead code.** Removing it did not redden the
+normalize test, because the value-dedup loop already re-indexes to a list and so drops
+the keys. Uncovered code that does nothing is the first thing to rot, so it is gone;
+one pass now deduplicates and normalizes, documented as such in the spec and the code.
+
+**The opaque context (Step 12) has a second cost, now paid.** Reading the `mixed`
+context back to delegate the index shrink needs a runtime narrowing — the first half,
+handled PHPStan-clean without a cast or ignore. The second half is what that narrowing
+does when the context is the WRONG shape. Silently returning no candidates was wrong:
+shrinking would stop and leave a counterexample un-shrunk with no signal — exactly the
+failure class this package exists to prevent. So `elements` now throws a
+`LogicException` naming the generator and the expected context shape. A context of the
+wrong shape is a generator bug, not user input, so `LogicException` (not
+`InvalidArgumentException`) is right, and it is loud. This is the pattern `map` and
+`associative` follow in step 4; it is written into SPEC-003 AC3 so it is not reinvented
+per combinator. The two halves together are the full price of keeping the context
+opaque — worth it for the encapsulation, but not free.
+
+## Step 16 —
 

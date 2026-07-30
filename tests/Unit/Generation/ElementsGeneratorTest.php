@@ -85,3 +85,12 @@ it('a single choice generates that value and does not shrink', function () {
     expect($g->generate(Source::seeded(1))->value)->toBe('only')
         ->and(shrinkValuesOf($g, new GeneratedValue('only', new GeneratedValue(0))))->toBe([]);
 })->group('SPEC-003');
+
+it('throws on a context of the wrong shape — a generator bug, not user input', function () {
+    $g = Gen::elements(['a', 'b', 'c']);
+
+    // The context should be the chosen index's GeneratedValue<int>; this is neither.
+    $bogus = new GeneratedValue('b', 'not-an-index');
+
+    expect(fn () => [...$g->shrink($bogus)])->toThrow(LogicException::class);
+})->group('SPEC-003');

@@ -38,10 +38,10 @@ integer shrinking composes into almost everything else. `elements` shrinks its i
 toward zero, so it shrinks toward the **first element** — that order is therefore
 semantic: put the simplest or most ordinary value first, because counterexamples
 reduce toward it, and a surprising first element yields counterexamples that read as
-noise. (Repeated in the `elements` docblock when it is built.) `elements` also
-normalizes its argument with `array_values` — keys are dropped, only order carries
-meaning — deduplicates by value so a shrink candidate is never the input value (not
-merely a different index), and throws on an empty array. `map` passes shrinking
+noise. (Repeated in the `elements` docblock when it is built.) `elements` deduplicates
+and normalizes in one pass — appending unique values to a fresh list drops the keys
+(only order carries meaning) and makes a shrink candidate never the input value (not
+merely a different index) — and throws on an empty array. `map` passes shrinking
 through to its part; `associative` shrinks a keyed bundle of generators.
 
 The combinator set was audited against the two dogfood examples once they existed
@@ -127,6 +127,10 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
     that index's generated value. `map` and `associative` delegate to their inner
     generator(s). `constant` is the degenerate case — one value, no shrinking, an
     empty candidate list — covered here as an edge case, not as its own criterion.*
+  - *A composite that reads its context throws a `LogicException` if the context is not
+    the shape it produced: a generator bug must fail loudly, never silently yield no
+    candidates and leave a counterexample un-shrunk. `map` and `associative` follow the
+    same pattern.*
 
 - **AC4 — sequence length is generated and shrinkable**
   - Given a maximum length *n*

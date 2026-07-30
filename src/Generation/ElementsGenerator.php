@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Provemark\StatefulCheck\Generation;
 
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Picks one of a fixed set of values, shrinking toward the first (SPEC-003 AC3).
@@ -31,11 +32,10 @@ final class ElementsGenerator implements Generator
      */
     public function __construct(array $choices)
     {
-        // Keys carry no meaning — only order does.
-        $choices = array_values($choices);
-
-        // Deduplicate by value so a shrink candidate is never the input value (not
-        // merely a different index). First occurrence wins; order is preserved.
+        // One pass both deduplicates by value and normalizes the keys away: appending
+        // to a fresh list drops the original keys (only order matters) and skips
+        // repeats, so a shrink candidate is never the input value (not merely a
+        // different index). First occurrence wins; order is preserved.
         $unique = [];
         foreach ($choices as $choice) {
             if (! in_array($choice, $unique, true)) {
@@ -71,7 +71,14 @@ final class ElementsGenerator implements Generator
         // Step 12); narrow it at runtime before delegating the index shrink.
         $context = $value->context;
         if (! $context instanceof GeneratedValue || ! is_int($context->value)) {
-            return;
+            // A context of the wrong shape is a bug in the generator that produced the
+            // value, not user input. Fail loudly: silently returning no candidates would
+            // stop shrinking and leave a counterexample un-shrunk with no signal — the
+            // exact failure class this package exists to prevent. Same pattern in map
+            // and associative.
+            throw new LogicException(
+                'ElementsGenerator::shrink() expects a GeneratedValue<int> context (the chosen index).',
+            );
         }
 
         foreach ($this->index->shrink(new GeneratedValue($context->value)) as $shrunkIndex) {
