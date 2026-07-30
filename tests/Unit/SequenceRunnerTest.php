@@ -88,6 +88,12 @@ final class SpyCommand implements Command
     }
 }
 
+/**
+ * A user-library-style exception subclass, used to check that `exceptionClass` records the
+ * concrete thrown class rather than generalising up to a parent (AC6, D020).
+ */
+final class BoomException extends RuntimeException {}
+
 it('runs a passing sequence to completion, each postcondition seeing the post-transition model', function () {
     $log = new CallLog;
     $commands = [
@@ -291,4 +297,57 @@ it('catches an expected exception, passes it to the postcondition, and continues
     };
     expect($modelOf('b', 'post'))->toBe(2)
         ->and($modelOf('c', 'pre'))->toBe(2);
+})->group('SPEC-001');
+
+it('classifies the failure kind by whether run() threw, not by the postcondition', function () {
+    // Two sequences identical except whether b's run() throws; b's postcondition is false in
+    // both. A runner that always chose one kind on a false postcondition would pass a
+    // single-branch test — needing opposite kinds here is what makes the precedence rule
+    // falsifiable, and AC2's kind assertion no longer a tautology.
+    $boom = new BoomException('boom');
+
+    $returned = (new SequenceRunner)->run(
+        [new SpyCommand('a', new CallLog), new SpyCommand('b', new CallLog, postconditionHolds: false)],
+        fn () => new stdClass,
+        0,
+    );
+    $threw = (new SequenceRunner)->run(
+        [new SpyCommand('a', new CallLog), new SpyCommand('b', new CallLog, postconditionHolds: false, runThrows: $boom)],
+        fn () => new stdClass,
+        0,
+    );
+
+    $rf = $returned->failure ?? throw new RuntimeException('expected a failure, got none');
+    $tf = $threw->failure ?? throw new RuntimeException('expected a failure, got none');
+
+    expect($rf->kind)->toBe(FailureKind::PostconditionFalse)
+        ->and($rf->exceptionClass)->toBeNull();
+    expect($tf->kind)->toBe(FailureKind::UnexpectedException)
+        ->and($tf->exceptionClass)->toBe(BoomException::class)
+        ->and($tf->exceptionClass)->not->toBe(RuntimeException::class); // concrete class, not a parent
+})->group('SPEC-001');
+
+it('an unexpected exception is a failure that stops the run, carrying the exception class', function () {
+    $log = new CallLog;
+    $boom = new BoomException('boom');
+    $commands = [
+        new SpyCommand('a', $log),
+        new SpyCommand('b', $log, postconditionHolds: false, runThrows: $boom),
+        new SpyCommand('c', $log),
+    ];
+
+    $result = (new SequenceRunner)->run($commands, fn () => new stdClass, 0);
+
+    // Stopped at b: c never ran. The absence of any 'c' event is the proof, not executed alone.
+    expect($result->passed)->toBeFalse()
+        ->and($result->executed)->toBe([true, true, false])
+        ->and(array_filter($log->events, fn (array $e): bool => $e[0] === 'c'))->toBe([]);
+
+    $failure = $result->failure ?? throw new RuntimeException('expected a failure, got none');
+    expect($failure->kind)->toBe(FailureKind::UnexpectedException)
+        ->and($failure->index)->toBe(1)
+        ->and($failure->commandClass)->toBe(SpyCommand::class)
+        ->and($failure->exceptionClass)->toBe(BoomException::class)
+        ->and($result->modelBefore)->toBe(1)  // nextState runs on the throw path
+        ->and($result->modelAfter)->toBe(2);
 })->group('SPEC-001');

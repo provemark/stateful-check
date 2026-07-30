@@ -64,9 +64,16 @@ final class SequenceRunner
             $executed[] = true;
 
             if (! $command->postCondition($model, $sut, $outcome)) {
-                // run() returned normally, so by the precedence rule (AC2) the kind is
-                // PostconditionFalse; the throw path (UnexpectedException) is AC6.
-                $failure = new Failure(FailureKind::PostconditionFalse, count($executed) - 1, $command::class);
+                // The precedence rule (AC2): the kind is decided by whether run() threw, not by
+                // the postcondition. A thrown outcome is an UnexpectedException carrying the
+                // exception's concrete class (D020); a returned one is a plain PostconditionFalse.
+                $exception = $outcome->exception;
+                $failure = new Failure(
+                    $outcome->threw ? FailureKind::UnexpectedException : FailureKind::PostconditionFalse,
+                    count($executed) - 1,
+                    $command::class,
+                    $exception !== null ? $exception::class : null,
+                );
 
                 // Commands after the stop never ran.
                 while (count($executed) < count($commands)) {

@@ -376,3 +376,28 @@ cost is the same trade, and sharper here: `run()`'s result type no longer flows 
 observation contract statically — the postcondition sees `mixed` and must narrow. If a
 symbolic-results design ever ties `run()`'s output to later commands (R9a), revisit whether
 that observation contract should be typed again.
+
+## D020 — Failure.exceptionClass is the concrete thrown class; failure identity is exact-class equality
+
+Spec: SPEC-001, AC6 (`Failure.exceptionClass`); consumed by SPEC-002 AC1
+Status: **decided**
+Decided: maurice, 2026-07-30
+Decision: when `run()` throws, `Failure.exceptionClass` is the concrete class of the thrown
+throwable (`$exception::class`), not a generalisation to a parent type. This field is part of the
+failure identity SPEC-002 AC1 compares two failures on ("did the shrunk sequence fail for the same
+reason"), and that comparison is exact-class equality — `RuntimeException` and a
+`RuntimeException` subclass are different failure kinds.
+Alternative rejected: record (or compare by) a parent class, i.e. an `instanceof`-style identity
+where a subclass matches its parent. Rejected as the default because it is a genuinely different
+semantics — it would call two failures throwing different concrete classes "the same" — and it is
+not needed by the two dogfood examples. It remains a deliberate future choice if a use appears,
+not something to back into.
+Because: the concrete class is the exact, predictable thing that was thrown; it is the simplest
+identity and the one a reader expects. Generalising up front bakes a comparison policy into the
+data, where exact-class equality keeps the policy in one place (SPEC-002 AC1) and open to change.
+Revisit if: a system under test throws **dynamically composed or anonymous exception classes** —
+then the class name differs between two runs of the *same* defect (e.g. an anonymous
+`class@anonymous…` name, or a per-instance generated class), and SPEC-002 AC1 would see two
+identical defects as different failures, defeating same-reason comparison. That concrete failure
+mode, not a taste preference, is what would force an `instanceof`-style or fingerprint-based
+identity.

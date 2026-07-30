@@ -409,6 +409,6 @@ least one test; every source file maps back to this spec.
 | AC3                  | tests/Unit/SequenceRunnerTest.php :: "skips a command whose precondition is false…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC4                  | tests/Unit/SequenceRunnerTest.php :: "records a total, index-aligned, replayable execution path" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC5                  | tests/Unit/SequenceRunnerTest.php :: "catches an expected exception…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
-| AC6                  | —                           | —                    |
+| AC6                  | tests/Unit/SequenceRunnerTest.php :: "classifies the failure kind by whether run() threw…" + "an unexpected exception is a failure that stops the run…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run; src/Failure.php (D020) |
 | AC7                  | —                           | —                    |
 | AC8                  | —                           | —                    |

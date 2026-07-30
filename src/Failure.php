@@ -18,7 +18,8 @@ final readonly class Failure
         public FailureKind $kind,
         public int $index,
         public string $commandClass,
-        // AC6 fills exceptionClass: the class of the exception run() threw.
+        // The concrete class of the exception run() threw (D020), null when run() returned. Part
+        // of failure identity, compared by exact-class equality in SPEC-002 AC1.
         public ?string $exceptionClass = null,
         public ?string $reason = null,
     ) {}
