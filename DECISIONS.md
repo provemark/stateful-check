@@ -250,3 +250,24 @@ which is deliberately kept the same shape so the port stays faithful where it
 matters — the model and the property.
 Revisit if: the stand-in ever drifts from the real builder's observable contract
 in a way that hides a difference the example is meant to demonstrate.
+
+## D015 — Integer shrink origin: clamp an implicit default, throw an explicit out-of-range value
+
+Spec: SPEC-003, `integers(int $min, int $max, ?int $origin = null)` (AC2)
+Status: **decided**
+Decided: maurice, 2026-07-30
+Decision: The origin parameter is `?int $origin = null`, and the two cases are
+treated differently — this distinction is the decision:
+  - `null` (not given): the effective origin is `0` clamped into `[$min, $max]`,
+    with no fuss. So `integers(10, 20)` shrinks toward `10`.
+  - an explicit value inside `[$min, $max]`: used as given.
+  - an explicit value outside `[$min, $max]`: throws at construction, naming the
+    origin and the bounds.
+Because: an origin that is *implicit* — the default `0` leaking through
+`integers(10, 20)` — must clamp, because throwing would break the common case for
+no reason. But an origin that is *explicitly* passed out of range is almost
+certainly a caller error, and silently relocating it hides the mistake. The
+nullable parameter is what lets the contract tell "the caller said nothing" apart
+from "the caller asked for something impossible", and answer each correctly.
+Revisit if: a real need appears to pass an out-of-range origin deliberately (none
+is known), in which case the throw becomes a clamp with a documented rationale.
