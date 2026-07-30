@@ -6,6 +6,7 @@
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-30                               |
 | Amended    | maurice, 2026-07-30 — combinator scope narrowed after the dogfood-example audit (`bool`, `oneOf`, `filter`, `tuple`, `vector` removed); AC3 broadened to cover `elements` (index-zero shrink), with `constant` as its degenerate edge case. Both are audit findings recorded before implementation. |
+| Amended    | maurice, 2026-07-30 — `Generator` made `@template-covariant T`, `shrink(GeneratedValue<mixed>)`, so a heterogeneous set of generators (`associative`) type-checks (D017). Re-approved on the same date. |
 | Supersedes | — (replaces the earlier draft "Generator port and Eris adapter") |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -131,6 +132,16 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
     the shape it produced: a generator bug must fail loudly, never silently yield no
     candidates and leave a counterexample un-shrunk. `map` and `associative` follow the
     same pattern.*
+  - *`associative` shrinks **one component at a time**, in key (array) order — the
+    order is semantic, like `elements`' choices, since it steers where the greedy loop
+    converges. This is a **documented local minimum** (R3): a bug that only appears when
+    two keys are coupled (say `n > m`) cannot be reached by reducing either alone, so
+    the result can look non-minimal. Reducing coupled keys together is out of scope.*
+  - *`associative`'s "a candidate is never the input" guarantee is **derived**: each
+    candidate differs only because its component generator promises it (`integers` by
+    construction, `elements` via dedup, `map` via its filter). A user generator that
+    breaks the clause propagates the break upward — the third layer of the same
+    decision (Step 14, Step 16).*
 
 - **AC4 — sequence length is generated and shrinkable**
   - Given a maximum length *n*
@@ -189,7 +200,14 @@ final readonly class GeneratedValue
     public function __construct(public mixed $value, public mixed $context = null) {}
 }
 
-/** @template T */
+/**
+ * Covariant in T (D017): T appears only in output positions, so a Generator<Sub> is a
+ * Generator<Super> — which is what lets a heterogeneous set of generators (associative)
+ * type-check. shrink() therefore takes GeneratedValue<mixed>, not GeneratedValue<T>; an
+ * implementation narrows what it receives and throws a LogicException on the wrong shape.
+ *
+ * @template-covariant T
+ */
 interface Generator
 {
     /** @return GeneratedValue<T> */
@@ -198,7 +216,7 @@ interface Generator
     /**
      * Smaller alternatives, closest-to-origin first, finite.
      *
-     * @param  GeneratedValue<T>  $value
+     * @param  GeneratedValue<mixed>  $value
      * @return iterable<GeneratedValue<T>>
      */
     public function shrink(GeneratedValue $value): iterable;
@@ -251,5 +269,5 @@ least one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | `tests/Unit/Generation/SourceTest.php` (group `SPEC-003`) | `src/Generation/Source.php` :: `Source` |
 | AC2                  | `tests/Unit/Generation/IntegersGeneratorTest.php` (group `SPEC-003`) | `src/Generation/IntegersGenerator.php`, `src/Generation/Gen.php` |
-| AC3                  | `ElementsGeneratorTest.php`, `ConstantGeneratorTest.php`, `MapGeneratorTest.php` (group `SPEC-003`) — `associative` pending (step 4b) | `ElementsGenerator.php`, `ConstantGenerator.php`, `MapGenerator.php`, `Gen.php` — `associative` pending |
+| AC3                  | `ElementsGeneratorTest.php`, `ConstantGeneratorTest.php`, `MapGeneratorTest.php`, `AssociativeGeneratorTest.php` (group `SPEC-003`) | `ElementsGenerator.php`, `ConstantGenerator.php`, `MapGenerator.php`, `AssociativeGenerator.php`, `Gen.php` |
 | AC4                  | —                           | —                    |

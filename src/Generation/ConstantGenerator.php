@@ -27,7 +27,7 @@ final class ConstantGenerator implements Generator
     }
 
     /**
-     * @param  GeneratedValue<T>  $value
+     * @param  GeneratedValue<mixed>  $value
      * @return iterable<GeneratedValue<T>>
      */
     public function shrink(GeneratedValue $value): iterable

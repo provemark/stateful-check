@@ -576,5 +576,60 @@ silently. Not a bug (the context is generator-internal, never user input), but s
 reading `elements` and `map` side by side expects the same protection and does not get
 it. The opacity buys encapsulation; the bill is paid unevenly.
 
-## Step 17 —
+## Step 17 — associative: R3 made concrete, and the third layer of the dedup decision (2026-07-30)
+
+**Component-by-component shrinking is where R3's local minimum stops being abstract.**
+`associative` reduces one key at a time. A bug that only fires when two keys are
+coupled — `n == m`, or `n > m` — cannot be reached by reducing either key alone: drop
+`n` and the coupling breaks, so that candidate passes; same for `m`. The greedy loop
+then halts on a record that still looks reducible. This is exactly R3 ("a documented
+local minimum, not a global one"), and it is the first place in the build where the
+guarantee has teeth. Rather than hide it, a test asserts the mechanism directly — every
+candidate changes exactly one component — which is honest about the limit without
+pretending to a global minimum. Reducing coupled keys together is out of scope for
+v0.1; it would need a different strategy and its own spec.
+
+**"A candidate is never the input" is derived here — the third layer of the Step 14
+decision.** At `elements` (Step 14) dedup made it true; at `map` (Step 16) a filter made
+it true; at `associative` it is true only because each component generator already makes
+it true. `associative` adds nothing of its own — a component that changes cannot leave
+the record equal to the input. But that means a *user's* generator that breaks the
+clause propagates the break straight through `associative`. Documented as a derived
+guarantee in SPEC-003, not silently relied on: the same decision, now three layers deep,
+and the deepest layer is the one a user controls.
+
+## Step 18 — the covariant Generator amendment; a concealed defect, not a limit (2026-07-30)
+
+Building `associative` surfaced that a heterogeneous keyed record does not type-check
+under PHPStan max: `Generator<int>` is not a `Generator<mixed>` while `Generator` is
+invariant. I first reached green with three compromises (a concrete-class return, a
+homogeneous-only test, a direct-construction empty test) and was ready to call the
+heterogeneous case a documented limit. It is not a limit — it is a concealed defect.
+Dogfood example 1 *uses* the heterogeneous case and only "passes" because `examples/`
+is outside the PHPStan paths. §4 says the examples define the contract, so the honest
+move was to amend the contract, not to document around the hole. Made `Generator`
+`@template-covariant T` with `shrink(GeneratedValue<mixed>)` (D017). All three
+compromises then dissolved: the facade returns `Generator<…>` again, the test is
+heterogeneous again, and the empty test calls `Gen::associative([])` again.
+
+**The cost, contract-wide and stated plainly (the Step 15/16 line, one level up
+again).** With `shrink(GeneratedValue<mixed>)`, every implementation loses the static
+guarantee that it receives the right kind of value; that guarantee moves entirely to
+the runtime narrowing and its `LogicException`. `integers` now narrows with `is_int`
+and throws, just as `elements`/`map`/`associative` narrow their context. The uneven
+protection I first noted at `map` (Step 16) is now the uniform rule: the type says
+`mixed`, and the generator is responsible for the check. That is coherent with the
+opaque context (Step 12) — shrink's input was never statically trustworthy about its
+value anyway — but it is a real trade, not a free win.
+
+**Where this hid, and the tell.** The gap existed from the contract commit; the
+covariance was wrong from the first line of `Generator`. It stayed invisible through
+`integers`, `constant`, `elements`, `map` because none of them combines *multiple*
+generators of *different* types — the place invariance bites. `associative` is the
+first, so it is where the defect surfaced. The tell worth remembering: a generic
+contract's variance is exercised only when something composes several instances at
+different type arguments; until then a wrong variance annotation is silent. Look there
+first when a contract "seems fine".
+
+## Step 19 —
 

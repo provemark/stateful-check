@@ -134,3 +134,10 @@ it('accepts a range whose width is exactly PHP_INT_MAX', function () {
     // Width PHP_INT_MAX - 0 fits, so this must construct rather than throw (D016).
     expect(Gen::integers(0, PHP_INT_MAX))->toBeInstanceOf(Generator::class);
 })->group('SPEC-003');
+
+it('throws on a non-int value — the covariant contract narrows at runtime (D017)', function () {
+    // shrink() takes GeneratedValue<mixed> since D017; a non-int value is a generator
+    // bug, not user input, so it fails loudly rather than doing arithmetic on a string.
+    expect(fn () => [...Gen::integers(0, 10)->shrink(new GeneratedValue('not-an-int'))])
+        ->toThrow(LogicException::class);
+})->group('SPEC-003');

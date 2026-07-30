@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Provemark\StatefulCheck\Generation;
 
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * A bounded integer generator that shrinks toward an origin (SPEC-003 AC2).
@@ -54,12 +55,17 @@ final class IntegersGenerator implements Generator
     }
 
     /**
-     * @param  GeneratedValue<int>  $value
+     * @param  GeneratedValue<mixed>  $value
      * @return iterable<GeneratedValue<int>>
      */
     public function shrink(GeneratedValue $value): iterable
     {
         $v = $value->value;
+        if (! is_int($v)) {
+            // The contract passes GeneratedValue<mixed> (D017); a non-int value here is
+            // a generator bug, not user input. Fail loudly, as elements/map/associative.
+            throw new LogicException('IntegersGenerator::shrink() expects a GeneratedValue<int>.');
+        }
 
         if ($v === $this->origin) {
             return;

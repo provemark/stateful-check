@@ -49,7 +49,7 @@ final class MapGenerator implements Generator
     }
 
     /**
-     * @param  GeneratedValue<TOut>  $value
+     * @param  GeneratedValue<mixed>  $value
      * @return iterable<GeneratedValue<TOut>>
      */
     public function shrink(GeneratedValue $value): iterable

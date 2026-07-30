@@ -292,3 +292,31 @@ promises reproducibility. Because `$v` and the origin both lie in `[$min, $max]`
 bounding the width keeps every `gap = $v − origin` within an int, so `shrink` is safe.
 Revisit if: a real use needs the unbounded range, which would require an
 overflow-safe midpoint instead of a width guard.
+
+## D017 — Generator is covariant; shrink takes GeneratedValue<mixed>
+
+Spec: SPEC-003, `Generator` interface (amendment)
+Status: **decided**
+Decided: maurice, 2026-07-30
+Decision: `Generator` is `@template-covariant T`, and `shrink()` takes
+`GeneratedValue<mixed>` rather than `GeneratedValue<T>`. T then appears only in output
+positions (`generate(): GeneratedValue<T>`, `shrink(): iterable<GeneratedValue<T>>`),
+which is what covariance requires. Implementations narrow the value they receive at
+runtime and throw a `LogicException` on the wrong shape — the pattern already used by
+`elements`, `map` and `associative`, now extended to `integers`.
+Alternative rejected: keep `Generator` invariant and document heterogeneous
+`associative` as an unsupported edge (option (a)). Rejected because dogfood example 1
+*uses* the heterogeneous case (`['name' => …, 'version' => …]`) and only passes because
+`examples/` is outside the PHPStan paths — a concealed defect, not a documented limit,
+and §4 says the examples define what the contract must support.
+Because: the trigger was concrete — a heterogeneous keyed record did not type-check
+under PHPStan max, since `Generator<int>` is not a `Generator<mixed>` while `Generator`
+is invariant. Covariance makes `Generator<int>` a `Generator<mixed>`, so a heterogeneous
+set type-checks with no per-call gymnastics. The design is coherent with the already-
+opaque `mixed` context (Step 12): shrink's input was never statically trustworthy about
+its value's type anyway.
+Revisit if: the runtime narrowing proves error-prone in practice. The widened
+`shrink` parameter trades the static guarantee "you receive the right kind of value"
+for a runtime check, contract-wide; if that trade turns out to hide real bugs, revisit
+whether a narrower, invariant shrink with an explicit variance escape is worth the
+friction.
