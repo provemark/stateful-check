@@ -96,3 +96,28 @@ it('fails loudly when the executed record does not match the sequence length', f
         null,
     ))->toThrow(LogicException::class);
 })->group('SPEC-002');
+
+it('every structural candidate retains the last executed command (SPEC-002 AC4)', function () {
+    // The filtered failing sequence; d is the last executed command — the one that failed.
+    $sequence = [
+        new GeneratedValue(new Cmd('a')),
+        new GeneratedValue(new Cmd('b')),
+        new GeneratedValue(new Cmd('c')),
+        new GeneratedValue(new Cmd('d')),
+    ];
+
+    $candidates = iterator_to_array((new SequenceShrinker)->candidateReductions($sequence), false);
+
+    // Non-vacuous: there is at least one genuine reduction to check the invariant against.
+    expect($candidates)->not->toBeEmpty();
+
+    foreach ($candidates as $candidate) {
+        $labels = array_map(fn (GeneratedValue $gv): string => (string) $gv->value, $candidate);
+
+        // Every candidate ends with d: removing the command that caused the failure is never a
+        // useful reduction, so the structural family never drops it. And it is a real reduction.
+        expect($labels)->not->toBeEmpty()
+            ->and(end($labels))->toBe('d')
+            ->and(count($labels))->toBeLessThan(count($sequence));
+    }
+})->group('SPEC-002');

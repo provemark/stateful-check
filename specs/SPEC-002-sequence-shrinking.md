@@ -295,7 +295,7 @@ least one test; every source file maps back to this spec.
 | AC1                  | cross-cutting invariant (R2) — asserted in every shrinker test and proven by AC7; row lists the covering tests once they exist | the R2 postcondition, not a distinct symbol |
 | AC2                  | —                           | —                    |
 | AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops skipped and never-reached commands…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
-| AC4                  | —                           | —                    |
+| AC4                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "every structural candidate retains the last executed command" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::candidateReductions` |
 | AC5                  | removed (D022) — the empty-sequence probe's trigger is unreachable in this model | n/a |
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |

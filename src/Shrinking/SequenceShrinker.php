@@ -59,4 +59,28 @@ final class SequenceShrinker
 
         return new ShrinkResult($representation, count($failing), $executions);
     }
+
+    /**
+     * Structural reduction candidates (SPEC-002 AC4): hold a prefix of length k and always keep
+     * the last command, dropping the middle. The last command caused the failure, so removing it
+     * is never a useful reduction and no candidate ever does. k runs up to `count - 2`, so the
+     * full sequence (no reduction) is never yielded; a sequence of length 0 or 1 has no structural
+     * reduction and yields nothing. The per-command argument family (AC2) is added here later.
+     *
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence
+     * @return iterable<list<GeneratedValue<Command<TModel, TSut, mixed>>>>
+     */
+    public function candidateReductions(array $sequence): iterable
+    {
+        $length = count($sequence);
+        if ($length <= 1) {
+            return;
+        }
+
+        $last = $sequence[$length - 1];
+
+        for ($k = 0; $k < $length - 1; $k++) {
+            yield [...array_slice($sequence, 0, $k), $last];
+        }
+    }
 }
