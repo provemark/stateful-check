@@ -64,4 +64,16 @@ final class Gen
     {
         return new MapGenerator($fn, $inner);
     }
+
+    /**
+     * A generator of a keyed record; shrinking reduces one component at a time, in
+     * array order. The generators may be heterogeneous (Generator is covariant, D017).
+     *
+     * @param  array<array-key, Generator<mixed>>  $generators
+     * @return Generator<array<array-key, mixed>>
+     */
+    public static function associative(array $generators): Generator
+    {
+        return new AssociativeGenerator($generators);
+    }
 }
