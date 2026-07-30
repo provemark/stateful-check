@@ -17,8 +17,6 @@ shrinker is this suite's job alone. Run with `composer meta` (`--group=meta`).
 - **Skipped and unreached commands are dropped.** A failing run with
   precondition-skipped commands and commands after the failure; the counterexample
   must contain neither, discovered without executing a candidate (SPEC-002 AC3).
-- **The empty sequence.** A failure not caused by the commands must shrink to the
-  empty sequence (SPEC-002 AC5).
 - **Cloning isolates candidates.** A command carrying mutable state must not leak
   between successive candidates (SPEC-002 AC6, D006).
 - **Non-determinism aborts.** A system whose executed path diverges on replay must

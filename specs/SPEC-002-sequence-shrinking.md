@@ -5,6 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-30                               |
+| Amended    | maurice, 2026-07-30 — AC5 (empty-sequence probe) removed, D022. The empty sequence cannot fail in this model — the runner checks nothing at zero commands — so the probe is a guaranteed-useless execution and its "empty counterexample" branch is dead; the question it asked is answered by construction (the shrinker only receives a failing `RunResult`). The candidate families drop from three to two (structural, argument), the meta case is removed, and `shrunkOnce` goes with it (its only purpose was trying the probe once). |
 | Amended    | maurice, 2026-07-30 — `SequenceShrinker::shrink()` takes the original failing `RunResult`. It makes the shrinker a consumer of what already happened, not a rediscoverer: `$original->executed` filters non-executed commands with **zero** candidate runs (AC3), the execution path is AC8's replay baseline, and `$original->failure` is the `sameKindAs` baseline for the AC1 invariant. `count($original->executed)` must equal `count($failing)` (the same run) or `shrink()` throws a `LogicException` — a length mismatch would filter wrong positions and silently return a wrong counterexample. |
 | Supersedes | —                                                 |
 
@@ -49,13 +50,14 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
 - Filtering that sequence to the commands that actually executed, from the execution record
   (SPEC-001 AC4). Both meanings of a false position — precondition-skipped (AC3) and never-reached
   after the failure — drop out identically; the shrinker does not distinguish them.
-- Candidate generation in three families, in this order:
-  1. **the empty sequence**, tried exactly once, as the first candidate;
-  2. **structural** — hold a prefix of length *k*, shrink the length of the
+- Candidate generation in two families, in this order:
+  1. **structural** — hold a prefix of length *k*, shrink the length of the
      retained suffix, always keeping the last executed command;
-  3. **per-command argument** — for position *i*, `alphabet->shrink(generatedValues[i])` (the
+  2. **per-command argument** — for position *i*, `alphabet->shrink(generatedValues[i])` (the
      generation core, SPEC-003), replacing that one command with each reduced value; sequence
      length unchanged.
+  (No empty-sequence probe: it always passes in this model, so trying it is a guaranteed-useless
+  execution — removed with AC5, D022.)
 - `Failure::sameKindAs()` — the identity comparison SPEC-001 declared and deferred to its only
   consumer. It is built here, with D020's exact-class semantics (a subclass is a different kind).
 - Lazy candidate generation: candidates are produced on demand, not materialised.
@@ -118,13 +120,12 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
     derived from — that command caused the failure, so removing it is never a
     useful reduction.
 
-- **AC5 — the empty sequence is tried once**
-  - Given a failing sequence being shrunk for the first time
-  - When candidates are generated
-  - Then the empty sequence is the first candidate; if it fails, shrinking is
-    complete and the counterexample is empty (the failure was not caused by the
-    commands). On subsequent shrinks of an already-shrunk sequence it is not
-    retried.
+- **AC5 — removed (D022).** The empty-sequence probe was deleted: in this model the empty
+  sequence cannot fail (the runner checks nothing at zero commands), so its trigger is unreachable
+  and its "empty counterexample" branch is dead. The question it asked — did the commands cause the
+  failure? — is answered by construction: the shrinker only ever receives a failing `RunResult`,
+  which can only fail through a command's postcondition or exception. The number is a redirect, not
+  renumbered. The probe returns if invariants are ever checked before the first command (D022).
 
 - **AC6 — commands are cloned between candidates** *(R9b, D006, D021)*
   - Given any command — every command is shallow-cloned out of its `GeneratedValue`
@@ -227,10 +228,13 @@ final class SequenceShrinker
 }
 
 /**
- * Candidates, lazily, in the order defined in Scope. Non-executed positions (SPEC-001 AC4) are
- * already gone from $sequence. Family 3 calls `$alphabet->shrink()` on the GeneratedValue at each
- * position; candidates keep their contexts, so an accepted one can be re-shrunk (restart). To run
- * a candidate, unwrap each GeneratedValue to a cloned Command for the runner (R9b).
+ * Candidates, lazily, in the order defined in Scope (structural, then per-command argument).
+ * Non-executed positions (SPEC-001 AC4) are already gone from $sequence. The argument family calls
+ * `$alphabet->shrink()` on the GeneratedValue at each position; candidates keep their contexts, so
+ * an accepted one can be re-shrunk (restart). To run a candidate, unwrap each GeneratedValue to a
+ * cloned Command for the runner (R9b). No `shrunkOnce` flag: it existed only to try the empty probe
+ * once (fast-check), and the probe is gone (D022) — the two families generate identically on the
+ * first shrink and every restart.
  *
  * @template TModel
  * @template TSut
@@ -239,7 +243,7 @@ final class SequenceShrinker
  * @param  Generator<Command<TModel, TSut, mixed>>            $alphabet
  * @return iterable<list<GeneratedValue<Command<TModel, TSut, mixed>>>>
  */
-function candidateReductions(array $sequence, Generator $alphabet, bool $shrunkOnce): iterable;
+function candidateReductions(array $sequence, Generator $alphabet): iterable;
 ```
 
 **The three forms at the layer boundary**, made explicit so no one discovers the conversion mid-build:
@@ -258,9 +262,10 @@ exact string like `inc[1],check[1]` is that the plumbing exists. Budget for it.
 ## Open questions
 
 - ~~**Restart versus continue after an accepted reduction.**~~
-  **Resolved: restart.** fast-check tracks a `shrunkOnce` flag and produces a
-  fresh context per accepted candidate, i.e. candidate generation begins again
-  from the newly reduced sequence. Match it.
+  **Resolved: restart.** Candidate generation begins again from the newly reduced sequence per
+  accepted candidate. fast-check also tracks a `shrunkOnce` flag, but only to try its empty probe
+  once; with the probe removed (D022) we do not need the flag — the two families generate
+  identically on the first shrink and every restart.
 - ~~**Flat iterable versus shrink tree for candidates.**~~
   **Resolved: lazy iterable, with per-command context.** Structural candidates
   need no tree; per-command argument shrinking needs the context that the
@@ -291,7 +296,7 @@ least one test; every source file maps back to this spec.
 | AC2                  | —                           | —                    |
 | AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops skipped and never-reached commands…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
 | AC4                  | —                           | —                    |
-| AC5                  | —                           | —                    |
+| AC5                  | removed (D022) — the empty-sequence probe's trigger is unreachable in this model | n/a |
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |
 | AC8                  | —                           | —                    |

@@ -48,7 +48,8 @@ All notable changes to this project are documented here. Format follows
 
 ### Changed
 
-- SPEC-002 (sequence shrinking) `approved` (maurice, 2026-07-30) after a review against the
+- SPEC-002 (sequence shrinking) `approved`, then amended: AC5 (the empty-sequence probe) removed as D022 — it cannot fail in this model, so it was a useless execution and a dead branch; `shrunkOnce` removed with it. CLAUDE.md gains R11 (an AC is proven fulfillable before approval), promoted on n=2 with `Failure::$reason`.
+- SPEC-002 (sequence shrinking) originally `approved` (maurice, 2026-07-30) after a review against the
   now-built SPEC-001/SPEC-003. Amended before approval: the shrinker takes the generated sequence
   as `list<GeneratedValue<Command>>` **and** the alphabet generator (family-3 argument shrinking is
   `alphabet->shrink(generatedValues[i])`); the generic signature replaces the stale bare

@@ -951,3 +951,25 @@ hard rules until they recurred (and that I used to refuse R11 at n=1), this recu
 rule in CLAUDE.md §6: `composer check && git commit`, the commit literally behind the gate. Not a
 pre-commit hook — the maintainer's argument stands (an invisible gate gets bypassed with
 `--no-verify`; a visible `&&` cannot be forgotten because the shell enforces it).
+
+## Step 31 — AC5 removed (empty probe is dead code); R11 promoted on n=2 (2026-07-30)
+
+Building toward the empty-candidate step surfaced that the empty sequence cannot fail in this model
+(the runner checks nothing at zero commands), so AC5's "empty fails → empty counterexample" branch is
+unreachable and its meta case unbuildable. The maintainer chose (d): remove the probe entirely (D022),
+not implement it defensively. It is a guaranteed-useless execution, and the question it asks is
+answered by construction — the shrinker only receives a *failing* RunResult, which can only fail
+through a command. Three threads pulled together: AC5 removed (redirect, not renumbered), the
+candidate families drop to two, and `shrunkOnce` goes with it (its only job was trying the probe once).
+
+Dependency order now (AC5 gone): AC10 → AC3 → **AC4** → AC2 → AC6 → AC9 → AC8 → AC7. AC4 (structural)
+becomes the first candidate family, and the shrink loop — generate, run, accept-and-restart —
+originates there. That resolves the earlier tangle: without the empty probe there was nothing for a
+first-candidate step to do.
+
+R11 promoted from observation to rule on the n=2 threshold — the same one that kept it (and R11's own
+existence) off at n=1, and that promoted the commit-behind-the-gate rule. Two ACs have now promised
+the impossible: `Failure::$reason` (no channel to fulfil — the (a) failure) and AC5's empty probe
+(unreachable trigger — the (b) failure). R11 makes the two-sided fulfillability check a pre-approval
+gate, the cheap-before half of the three-sided traceability check that otherwise runs only at
+`implemented`.

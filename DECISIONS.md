@@ -431,3 +431,28 @@ wrong), the same class the LogicException narrowing guards catch elsewhere. This
 shrinker-internal invariant, so its guard is a **unit test** at SPEC-002 build (assert a family-3
 candidate's command corresponds to its context's provenance), **not** a planted-system meta case: the
 meta-suite tests system bugs, not wrapper consistency.
+
+## D022 — The empty-sequence shrink probe is removed; it cannot fail in this model
+
+Spec: SPEC-002 (was AC5, the empty candidate)
+Status: **decided**
+Decided: maurice, 2026-07-30
+Decision: the shrinker does not try the empty sequence as a candidate. In this model the empty
+sequence cannot fail — SPEC-001's runner checks nothing at zero commands, so `run([])` always
+returns `passed: true` — so probing it is a guaranteed-useless execution (exactly what AC9's budget
+exists to avoid), and its "shrinking is complete, counterexample is empty" branch is unreachable
+dead code. The question the probe asks — did the commands cause the failure? — is already answered
+by construction: the shrinker only ever receives a *failing* `RunResult`, and a run can only fail
+through a command's postcondition returning false or a command's `run()` throwing. There is no
+command-independent failure to find.
+Alternative rejected: implement the probe defensively (run the empty sequence, accept it if it
+fails). Rejected because the branch is not merely unlikely but *impossible* to trigger here, so it
+is dead code that R8 could never give a planted-bug meta-test — an untestable branch is worse than
+an absent one. fast-check keeps the probe because its property can fail outside the commands; ours
+cannot.
+Because: removing it is smaller, faster (one fewer execution per shrink), and honest about what the
+model can do. AC5 is left as a numbered redirect rather than renumbered, and `shrunkOnce` — whose
+only purpose was trying the probe exactly once — goes with it.
+Revisit if: invariants are ever checked *before the first command* (a start-of-run postcondition,
+or setup/initial-state failures surfaced as run failures). Then the empty sequence could fail, the
+probe becomes reachable, and it returns with a meta-test.
