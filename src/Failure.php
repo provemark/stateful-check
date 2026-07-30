@@ -22,4 +22,17 @@ final readonly class Failure
         // of failure identity, compared by exact-class equality in SPEC-002 AC1.
         public ?string $exceptionClass = null,
     ) {}
+
+    /**
+     * Identity comparison (SPEC-002 AC10): same FailureKind, same failing command class, same
+     * exception class — the exception class by exact string, which is exact-class equality (D020),
+     * because `exceptionClass` already holds the concrete thrown class. `index` is ignored. This is
+     * the invariant AC1 asserts across the whole shrinker suite, so it must not be loosened.
+     */
+    public function sameKindAs(self $other): bool
+    {
+        return $this->kind === $other->kind
+            && $this->commandClass === $other->commandClass
+            && $this->exceptionClass === $other->exceptionClass;
+    }
 }

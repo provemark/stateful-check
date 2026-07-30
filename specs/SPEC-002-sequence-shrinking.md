@@ -287,4 +287,4 @@ least one test; every source file maps back to this spec.
 | AC7                  | —                           | —                    |
 | AC8                  | —                           | —                    |
 | AC9                  | —                           | —                    |
-| AC10                 | —                           | —                    |
+| AC10                 | `tests/Unit/FailureTest.php` (group `SPEC-002`) | `src/Failure.php` :: `Failure::sameKindAs` |
