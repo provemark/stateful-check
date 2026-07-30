@@ -168,7 +168,11 @@ final class Source
 /**
  * A generated value plus whatever its generator needs to shrink it later.
  *
- * @template T
+ * Covariant in T: a readonly holder only ever yields its value, so a
+ * GeneratedValue<Sub> is safely a GeneratedValue<Super>. (Adopted for that reason,
+ * but the trigger was a literal-type friction in the map tests — see NOTES.)
+ *
+ * @template-covariant T
  */
 final readonly class GeneratedValue
 {

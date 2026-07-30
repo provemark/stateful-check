@@ -559,5 +559,22 @@ the `is_int` guard `elements` needed, because map's inner is a template `Generat
 mixed cannot enter without narrowing. A concrete inner type costs a runtime guard; a
 template inner does not.
 
+**Honest about the order: covariance came from test friction, not a design insight.**
+The conclusion is right — a readonly holder should be covariant — but I did not reason
+my way there from the design; a red PHPStan message pushed me, and the justification
+came after. Worth recording, because that is exactly the direction a contract takes
+shape by accident: a type refinement adopted to silence a message, rationalized later.
+It happens to be sound here; next time it might not be.
+
+**And the price of the opaque context is uneven between generators — the second half of
+the Step 15 observation.** `elements` has a concrete `Generator<int>` inner, so a
+wrong-shaped context is caught by a runtime guard and a `LogicException`. `map` has a
+template `Generator<TIn>` inner, so there is no equivalent guard: a context holding a
+`GeneratedValue` whose value is the wrong type does not hit `map`'s `LogicException`, it
+falls through to a `TypeError` deeper in `$fn`, or — with a loosely typed `$fn` — runs
+silently. Not a bug (the context is generator-internal, never user input), but someone
+reading `elements` and `map` side by side expects the same protection and does not get
+it. The opacity buys encapsulation; the bill is paid unevenly.
+
 ## Step 17 —
 
