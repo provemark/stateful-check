@@ -7,7 +7,10 @@ namespace Provemark\StatefulCheck\Generation;
 /**
  * A generated value of type T plus whatever its generator needs to shrink it later.
  *
- * @template T
+ * Covariant in T: a readonly holder only ever yields its value, so a
+ * GeneratedValue<Sub> is safely a GeneratedValue<Super>.
+ *
+ * @template-covariant T
  */
 final readonly class GeneratedValue
 {

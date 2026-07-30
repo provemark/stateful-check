@@ -48,4 +48,20 @@ final class Gen
     {
         return new ElementsGenerator($choices);
     }
+
+    /**
+     * Applies a function to a generator's values; shrinking delegates to the inner
+     * generator and re-applies the function.
+     *
+     * @template TIn
+     * @template TOut
+     *
+     * @param  callable(TIn): TOut  $fn
+     * @param  Generator<TIn>  $inner
+     * @return Generator<TOut>
+     */
+    public static function map(callable $fn, Generator $inner): Generator
+    {
+        return new MapGenerator($fn, $inner);
+    }
 }

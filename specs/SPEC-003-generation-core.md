@@ -247,5 +247,5 @@ least one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | `tests/Unit/Generation/SourceTest.php` (group `SPEC-003`) | `src/Generation/Source.php` :: `Source` |
 | AC2                  | `tests/Unit/Generation/IntegersGeneratorTest.php` (group `SPEC-003`) | `src/Generation/IntegersGenerator.php`, `src/Generation/Gen.php` |
-| AC3                  | `tests/Unit/Generation/ElementsGeneratorTest.php`, `ConstantGeneratorTest.php` (group `SPEC-003`) — `map`/`associative` pending (step 4) | `src/Generation/ElementsGenerator.php`, `ConstantGenerator.php`, `Gen.php` — `map`/`associative` pending |
+| AC3                  | `ElementsGeneratorTest.php`, `ConstantGeneratorTest.php`, `MapGeneratorTest.php` (group `SPEC-003`) — `associative` pending (step 4b) | `ElementsGenerator.php`, `ConstantGenerator.php`, `MapGenerator.php`, `Gen.php` — `associative` pending |
 | AC4                  | —                           | —                    |

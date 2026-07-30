@@ -538,5 +538,26 @@ wrong shape is a generator bug, not user input, so `LogicException` (not
 per combinator. The two halves together are the full price of keeping the context
 opaque — worth it for the encapsulation, but not free.
 
-## Step 16 —
+## Step 16 — map: the dedup clause one layer up, and covariance (2026-07-30)
+
+**`map` filters candidates whose mapped value equals the input — the Step 14 dedup
+decision, one layer up.** A non-injective function collapses distinct inner values onto
+the same output: `map(fn ($n) => $n % 2, integers(0, 100))` maps inner 50 and inner 38
+both to 0, so a shrunk inner can map back to the input value and break the "a candidate
+is never the input" clause at the value level. `map.shrink` drops those. The comparison
+is strict `===`, consistent with `elements`' `in_array(..., true)` dedup — and it
+carries the same caveat: `===` is identity for objects, so two equal-but-distinct
+objects are treated as different values and slip through. Same limitation as `elements`,
+recorded here as its continuation.
+
+**`GeneratedValue` is now `@template-covariant T`.** It is a readonly holder that only
+ever yields its value, so covariance is sound, and it resolved a literal-type friction
+the map tests hit (a `GeneratedValue<int<0,0>>` did not fit an invariant
+`GeneratedValue<int>`). Also learned: map's context-narrowing was PHPStan-clean without
+the `is_int` guard `elements` needed, because map's inner is a template `Generator<TIn>`
+(mixed flows into `TIn`), whereas `elements`' inner is a concrete `Generator<int>` that
+mixed cannot enter without narrowing. A concrete inner type costs a runtime guard; a
+template inner does not.
+
+## Step 17 —
 
