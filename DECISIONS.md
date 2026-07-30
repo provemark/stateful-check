@@ -403,3 +403,31 @@ then the class name differs between two runs of the *same* defect (e.g. an anony
 identical defects as different failures, defeating same-reason comparison. That concrete failure
 mode, not a taste preference, is what would force an `instanceof`-style or fingerprint-based
 identity.
+
+## D021 — A GeneratedValue<Command> wrapper's command and context are one matched pair; the command leads
+
+Spec: SPEC-002 (cloning between candidates, R9b); the alphabet generator's context (SPEC-003 AC5)
+Status: **decided**
+Decided: maurice, 2026-07-30
+Decision: a `GeneratedValue<Command>` pairs a command with the context that produced it in one
+`generate()`. Running a candidate clones the command out of the wrapper (R9b) into a **new wrapper**
+carrying the shallow clone and the **same, unchanged context**; the context is shrink data, never
+executed, so it is never cloned. The shrinker never re-pairs a command with a foreign context. On
+any divergence between the two, the **command is authoritative** — it is what runs and what the
+counterexample reports as having failed; the context is only a shrink aid, since family 3 re-derives
+argument reductions from the context's integer value (through `map`), not from the wrapper's command.
+Alternative rejected (a): clone the context alongside the command. Rejected — the context is opaque,
+immutable shrink data (Step 12); cloning it buys nothing and invites the two copies to drift apart.
+Alternative rejected (b): do not clone at all, reuse the command across candidates. Rejected by
+R9b/D006 — a command carrying mutable state would leak between candidates and silently corrupt the
+run under the shrinker.
+Because: shallow clone + shared context is the minimum that satisfies R9b without touching the opaque
+context, and it is safe precisely because command-identity and context serve different consumers (run
+vs shrink), and family 3 does not read the wrapper's command.
+Revisit if / guard: the safety rests on command and context staying a matched pair. If a wrapper is
+ever built pairing a command with a foreign context, family 3 yields candidates that are reductions
+of a *different* command — a silent inconsistency (nothing throws, the counterexample is merely
+wrong), the same class the LogicException narrowing guards catch elsewhere. This is a
+shrinker-internal invariant, so its guard is a **unit test** at SPEC-002 build (assert a family-3
+candidate's command corresponds to its context's provenance), **not** a planted-system meta case: the
+meta-suite tests system bugs, not wrapper consistency.
