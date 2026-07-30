@@ -70,8 +70,11 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
 - **AC1 — the returned sequence still fails** *(R2, the central postcondition)*
   - Given a failing sequence
   - When it is shrunk
-  - Then the returned sequence, executed against a fresh system, still fails —
-    and fails with the same reason class as the original.
+  - Then the returned sequence, executed against a fresh system, still fails, and
+    its `Failure` satisfies `sameKindAs()` against the original: same
+    `FailureKind`, same failing command class, same exception class if any.
+    Messages are explicitly not compared — a shrunk sequence legitimately
+    produces different numbers in them.
 
 - **AC2 — the returned sequence is a local minimum** *(R3)*
   - Given a shrunk sequence
@@ -101,8 +104,9 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
     commands). On subsequent shrinks of an already-shrunk sequence it is not
     retried.
 
-- **AC6 — commands are cloned between candidates** *(R9b)*
-  - Given a command carrying mutable state
+- **AC6 — commands are cloned between candidates** *(R9b, D006)*
+  - Given any command — every command is shallow-cloned before a candidate runs;
+    a command carrying mutable state is what makes the cloning observable
   - When it appears in two successive candidates
   - Then the second candidate receives a fresh clone, and no state from the first
     execution is observable in it.
@@ -155,7 +159,7 @@ final class SequenceShrinker
 {
     public function __construct(
         private SequenceRunner $runner,
-        private int $budget = 200,
+        private int $budget = 100,
     ) {}
 
     /** @param list<Command> $failing */
@@ -187,12 +191,15 @@ exact string like `inc[1],check[1]` is that the plumbing exists. Budget for it.
   **Resolved: lazy iterable, with per-command context.** Structural candidates
   need no tree; per-command argument shrinking needs the context that the
   generation core carries alongside each value (SPEC-003).
-- **"Same reason class" (AC1) — open, blocker for the test.** Needs a definition
-  before AC1 can be tested. Exception class plus failing command type is probably
-  right; comparing messages is too strict. Fix it before writing the test.
-- **Budget default — open, non-blocker.** 200 executions is a guess: far more
-  than needed in memory, already minutes over HTTP. Consider a time budget
-  instead of, or alongside, a count.
+- ~~**"Same reason class" (AC1).**~~ **Resolved (D002):** identity is
+  `FailureKind` + failing command class + exception class, compared via
+  `Failure::sameKindAs()` (SPEC-001). Messages excluded. This required SPEC-001 to
+  carry a structured `Failure` instead of a free-text reason — the two specs were
+  amended together.
+- ~~**Budget default — count or time?**~~ **Resolved (D007):** a count of
+  candidate executions, default 100 — never a time budget, which would break
+  determinism (the same seed shrinks less far on a slow machine). Document how to
+  lower it for slow systems.
 - **Does the retained-suffix strategy need a matching prefix strategy? — open,
   non-blocker.** fast-check holds a prefix and shrinks the suffix length. Whether
   the mirror case (hold a suffix, shrink a prefix) finds anything extra is

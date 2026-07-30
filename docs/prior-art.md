@@ -1,6 +1,6 @@
 # Prior art
 
-Required reading before designing anything (CLAUDE.md §7). This records what the
+Required reading before designing anything (CLAUDE.md §8). This records what the
 mature implementations actually do, where they disagree, and what the PHP
 attempts tell us. Cite it in specs. Add findings as you verify them — mark
 anything unverified as such rather than repeating a claim.
@@ -55,7 +55,9 @@ command sequences. Read `CommandWrapper` first, then `CommandsArbitrary`.
   shrinking is only possible because that context survives generation. This
   fixed the shape of our generation core (SPEC-003).
 - Commands are **cloned** into every candidate, producing fresh wrappers with
-  `hasRan = false`. Origin of R9b.
+  `hasRan = false`. Origin of R9b. fast-check clones only when the command
+  supports it; we clone every command unconditionally (D006), because an opt-in
+  clone fails silently — a deliberate divergence, not an inherited detail.
 - `replayPath` is a boolean array — literally "which commands ran" — serialised
   into the failure output. `filterOnReplay` throws `Mismatch between replayPath
   and real execution` when a replay diverges. That is non-determinism detection
@@ -71,8 +73,10 @@ command sequences. Read `CommandWrapper` first, then `CommandsArbitrary`.
   This began as a constraint (Eris was a black box) and is now a choice: since
   SPEC-003 owns generation, the integrated model became available and was not
   taken. External keeps the shrinker testable in isolation and keeps SPEC-002
-  coherent as written. Recorded here as a deliberate divergence rather than an
-  inherited limitation, per CLAUDE.md §7.
+  coherent as written; the advantage of integrated shrinking weighs lightly here
+  because our sequence structure dominates, not the values. Decided in D003 and
+  recorded here as a deliberate divergence rather than an inherited limitation,
+  per CLAUDE.md §8.
 
 ## stateful-check (Clojure)
 
@@ -159,13 +163,31 @@ this document.
 
 - [ ] fast-check's exact shrinking loop: restart semantics, and whether sequence
       length shrinks independently of contents.
-- [ ] `Random\Randomizer` fork semantics: does cloning a `Randomizer` truly give
-      an independent continuation, or is engine state shared? SPEC-003 AC2
-      depends on the answer, and it is the one assumption underneath the whole
-      generation core.
-- [ ] Whether `Random\Engine\Mt19937` produces identical sequences across PHP
-      patch versions and platforms (SPEC-003 AC1 claims reproducibility "across
-      separate processes").
+- [x] **`Random\Engine\Mt19937` reproducibility — verified 2026-07-29** on PHP
+      8.3.6, Linux, 64-bit (`docs/verification/mt19937.php`). Same seed gives an
+      identical sequence within a process, between two independent instances, and
+      **across separate processes**. It is unaffected by a global `mt_srand()`.
+      Both `Randomizer` and the engine serialise and resume correctly.
+
+      Two findings that changed the specs:
+
+      - **The mode argument changes the output.**
+        `new Mt19937($seed, MT_RAND_PHP)` yields a different stream from the
+        default `MT_RAND_MT19937` (575 vs 506 for the same seed). The mode must
+        be passed explicitly, not left to the default, or a future default change
+        silently breaks every recorded seed. SPEC-003 AC1 amended.
+      - **`Randomizer` cannot be cloned at all** — it throws
+        `Error: Trying to clone an uncloneable object`. The *engine* can be, and a
+        cloned engine continues the same stream. Independent confirmation that
+        dropping `fork()` (D010) was right; had it stayed, it would have had to be
+        built at the engine level.
+
+      Still untested, and honestly so: other PHP minor versions, 32-bit builds,
+      and non-Linux platforms. Mt19937 is a fixed algorithm and PHP's engine
+      objects are documented as reproducible, so divergence is unlikely — but
+      "unlikely" is not "verified", and 32-bit is the plausible edge because
+      `PHP_INT_SIZE` affects range mapping. Re-run the script if the package ever
+      claims support beyond 64-bit Linux.
 
 Only relevant if SPEC-004 (optional Eris adapter) is ever scheduled:
 

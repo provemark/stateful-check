@@ -21,10 +21,10 @@ Erlang, Clojure, Python and TypeScript have had this for years. PHP does not.
 
 ```php
 // Sketch — not the final API.
-$result = StatefulCheck::for($commandGenerator)
-    ->withModel(fn () => CartModel::empty())
-    ->withSystem(fn () => new Cart())
-    ->run();
+$result = (new StatefulProperty(
+    alphabet: [$addItem, $removeItem],
+    setup: fn () => new Setup(model: CartModel::empty(), system: new Cart()),
+))->check();
 ```
 
 Four parts per command: a precondition, execution against the real system, a
@@ -42,15 +42,25 @@ that actually matter.
 - **No general-purpose generator library.** Generation is owned — seeded on PHP
   8.2's Random extension — but only the combinators this needs exist. It is not a
   replacement for a full property-testing toolkit.
+- **No stateless property testing.** This is the *stateful* layer: it generates
+  and shrinks command sequences. It has no `forAll` for input-based properties. If
+  you also write those, pair it with a stateless property tester — [Eris](https://github.com/giorgiosironi/eris)
+  is the natural companion in PHP.
 - **No help with non-deterministic systems.** Shrinking requires a stable
   verdict. A flapping system aborts shrinking with a message rather than
   reporting a misleading counterexample.
+- **No check that a system's own values are immutable.** The runner threads one
+  system handle through the sequence (a `Ref` for immutable systems), which erases
+  the distinction between an immutable value passed forward and a mutable object
+  mutated in place. A property such as "an earlier builder instance is untouched by
+  later commands" cannot be expressed here — it is a property of the system, not of
+  the command sequence, and belongs in an ordinary test.
 
 ## Dependencies
 
 None at runtime beyond PHP 8.2. Generation is built on the Random extension,
-which gives seeded, isolated, forkable sources — the determinism that sound
-shrinking requires.
+which gives seeded, isolated sources — the determinism that sound shrinking
+requires.
 
 ## Prior art
 

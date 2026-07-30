@@ -19,7 +19,8 @@ No implementation code exists before an approved spec. In order, every time:
 1. **Spec.** Write or amend `specs/SPEC-###-<slug>.md` from `specs/TEMPLATE.md`.
    Status starts `draft`. Do not write implementation code while `draft`.
 2. **Approval.** Maintainer (maurice) approves explicitly. Status → `approved`.
-   Record name + date in the header table.
+   Record name + date in the header table. Any open question the spec marks as a
+   blocker must be answered in `DECISIONS.md` first.
 3. **Tests first.** Write the Pest tests for every acceptance criterion, each
    tagged `->group('SPEC-###')`. They must fail for the right reason before any
    implementation exists.
@@ -32,7 +33,63 @@ Amendments: only the Traceability section of an `approved` spec may change
 without re-approval. Everything else needs a proposed amendment or a new spec
 that supersedes.
 
-## 2. Hard domain rules
+## 2. Working protocol — how implementation proceeds
+
+Implementation is deliberately slow. The point is not to produce the package
+quickly; it is that the maintainer understands every design decision in it, and
+can defend the claims it makes. A correct package he cannot explain is a failure.
+
+**One acceptance criterion at a time.** Never batch. The unit of work is: one AC
+→ one failing test → the smallest implementation that passes it → stop and
+report. Not one spec, not one class. One AC.
+
+**Explain before writing.** At the start of each step, state in plain language
+what is about to be built, which AC it satisfies, what the approach is, and what
+the alternatives were. Then wait for the maintainer to say go. Do not write code
+in the same turn as the proposal.
+
+**Prove the test fails first, and for the right reason.** Show the actual failure
+output before implementing. A test that passes before the implementation exists
+is testing nothing, and this is the most common way a test suite quietly becomes
+decorative.
+
+**Stop and report after every step.** Say what changed, which command proves it
+(and its output), what is now green, and what the next step would be. Then stop.
+Do not continue to the next AC unprompted.
+
+**Never guess an open question.** The specs mark open questions explicitly, some
+as blockers. If a step touches one, stop and ask. Guessing produces plausible
+code built on an unmade decision, which is the hardest kind of mistake to find
+later. Record every answer in `DECISIONS.md`.
+
+**Never weaken a test to make code pass.** If a test appears wrong, stop and say
+so; do not adjust it. Tests and implementation must not change in the same step.
+This rule exists because relaxing an assertion is the path of least resistance
+and it silently destroys the value of the suite.
+
+**Never add an abstraction the spec does not require.** If something seems
+necessary but is not specced, stop and propose a spec amendment. Interfaces,
+base classes, config options and "we'll need this later" hooks all fall under
+this.
+
+**Size check.** If more than roughly fifty lines are needed before a test goes
+green, the step was too large. Stop, split it, and say so.
+
+**Register.** Explanations to the maintainer are in Dutch; code, comments,
+commit messages, specs and documentation are in English. Explain the *why* and
+name the trade-off, not just what was typed. Flag anything uncertain rather than
+presenting a guess with confidence — including uncertainty about whether an
+approach is the right one.
+
+**Commits.** One commit per AC. Message references the spec and criterion, e.g.
+`SPEC-003 AC3: integer shrinking terminates at the origin`. Small commits are
+what make it possible to back out a wrong turn without losing the rest.
+
+**At the start of every session**, read in this order: `CLAUDE.md`,
+`ROADMAP.md`, `DECISIONS.md`, `NOTES.md`, and the spec currently being worked.
+Then state where the work stands and what the next single step is — and wait.
+
+## 3. Hard domain rules
 
 Derived from prior art (`docs/prior-art.md`) and from what already went wrong in
 this space. Violating these produces a tool that lies, which is worse than no
@@ -100,11 +157,15 @@ carries leaks between candidates and destroys reproducibility.
 - **R9a — Commands must be independent.** A command may not depend on the return
   value of an earlier command. v0.1 has no symbolic results; this is a deliberate
   limitation (SPEC-001) and the precondition for R1.
-- **R9b — Commands must be stateless or cloneable.** The shrinker clones every
-  command before running a candidate. A command holding mutable state must
-  implement cloning; one that cannot be cloned safely must not carry state.
+- **R9b — Commands are always cloned; state that cannot be shallow-cloned must
+  declare `__clone`.** The shrinker shallow-clones every command (plain `clone`)
+  before running a candidate — always, not opt-in (D006). A shallow clone does not
+  copy held objects, so a command that holds one it must not share implements
+  `__clone`. There is no opt-in `Cloneable` interface: opt-in fails silently, and
+  a silently-unreliable shrinker is exactly what this package exists to prevent.
+  This diverges from fast-check, which clones only when the command supports it.
 
-## 3. Scope discipline
+## 4. Scope discipline
 
 v0.1 is: `Command` contract, model-driven sequential runner, sequence shrinking,
 PHPUnit + Pest integration. Nothing else.
@@ -125,9 +186,9 @@ tests untouchable by the implementing agent). It will build on this engine.
 Keeping it separate is what keeps this one general and its claims honest.
 
 If a proposed abstraction is not needed to express the two existing real suites
-(see §4), it does not go in.
+(see §5), it does not go in.
 
-## 4. Dogfooding
+## 5. Dogfooding
 
 The package must be able to express, without extension, the hand-rolled stateful
 tests already written in `provemark/content-credentials`:
@@ -140,7 +201,7 @@ tests already written in `provemark/content-credentials`:
 Port both into `examples/` and keep them passing. They are the acceptance test
 for the API, and the honest answer to "does this abstraction earn its place".
 
-## 5. Quality gates
+## 6. Quality gates
 
 `composer check` must pass before any spec reaches `implemented`:
 
@@ -153,14 +214,14 @@ for the API, and the honest answer to "does this abstraction earn its place".
 extension. Value objects `readonly`. No suppression of errors to make a gate
 pass.
 
-## 6. Writing style for docs and README
+## 7. Writing style for docs and README
 
 Plain, specific, and honest about limits. State what the tool cannot do in the
 same breath as what it can — the limitations section is a feature, and it is the
 reason a sceptical reader trusts the rest. No marketing register. No comparison
 tables against tools we have not run.
 
-## 7. Prior art is required reading
+## 8. Prior art is required reading
 
 `docs/prior-art.md` records what the mature implementations do and where they
 disagree. Consult it before designing anything; cite it in specs.

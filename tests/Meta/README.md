@@ -1,74 +1,35 @@
-# stateful-check
+# Meta-suite — planted-bug tests for the shrinker (R8)
 
-Model-based (stateful) property testing for PHP. Generate sequences of
-commands, run them against a system and a shadow model in lockstep, and shrink
-a failure to a minimal counterexample.
+Every shrinking behaviour needs a system with a **deliberately planted bug** and a
+**known minimal reproducing sequence**, so the shrinker is tested against a real
+reduction and not merely "does not crash" (CLAUDE.md §3, R8). Each case here asserts
+the exact minimal sequence the shrinker returns, compared by its string form.
 
-> **Status: pre-release.** Specs are written, implementation is not. Nothing
-> here is stable yet.
+The dogfood examples in `examples/` do **not** exercise the shrinker: they are
+written to pass, and shrinking runs only on a *failing* sequence. Validating the
+shrinker is this suite's job alone. Run with `composer meta` (`--group=meta`).
 
-## Why
+## Planned cases
 
-Property-based testing generates values. A stateless property looks for an
-*input* that breaks an invariant; a stateful one looks for an *ordering of
-events* — the read before the write, the setter that clobbers an
-unrelated slot, the retry that double-applies. You cannot reach those by
-generating more values. You have to generate programs.
-
-Erlang, Clojure, Python and TypeScript have had this for years. PHP does not.
-
-## What it does
-
-```php
-// Sketch — not the final API.
-$result = StatefulCheck::for($commandGenerator)
-    ->withModel(fn () => CartModel::empty())
-    ->withSystem(fn () => new Cart())
-    ->run();
-```
-
-Four parts per command: a precondition, execution against the real system, a
-model transition, and a postcondition comparing the two. The runner checks after
-every step; the shrinker reduces a twelve-command failure to the two commands
-that actually matter.
-
-## What it does not do
-
-- **No parallel execution and no automatic race detection.** PHP is
-  share-nothing and request-scoped. The headline feature of the Erlang original
-  is not available here and will not be claimed.
-- **No global minimum.** Shrinking returns a documented local minimum: no single
-  further reduction step both stays valid and still fails.
-- **No general-purpose generator library.** Generation is owned — seeded on PHP
-  8.2's Random extension — but only the combinators this needs exist. It is not a
-  replacement for a full property-testing toolkit.
-- **No help with non-deterministic systems.** Shrinking requires a stable
-  verdict. A flapping system aborts shrinking with a message rather than
-  reporting a misleading counterexample.
-
-## Dependencies
-
-None at runtime beyond PHP 8.2. Generation is built on the Random extension,
-which gives seeded, isolated, forkable sources — the determinism that sound
-shrinking requires.
-
-## Prior art
-
-`docs/prior-art.md` records what fast-check, stateful-check, PropEr and
-Hypothesis do, and what the two earlier PHP attempts tell us. The closest
-blueprint is fast-check's `fc.commands`.
-
-## Development
-
-Spec-driven: every change starts from an approved spec in `specs/`, tests come
-before implementation, and each acceptance criterion maps to a test in the
-spec's traceability table.
-
-```bash
-composer check    # pint + phpstan (max) + pest
-composer meta     # shrinker correctness against planted bugs
-```
-
-## Licence
-
-MIT.
+- **Order-dependent bug → minimal two-command sequence.** A system that fails only
+  when command B follows command A. A long failing sequence must shrink to exactly
+  `A, B` (SPEC-002 AC7).
+- **Skipped and unreached commands are dropped.** A failing run with
+  precondition-skipped commands and commands after the failure; the counterexample
+  must contain neither, discovered without executing a candidate (SPEC-002 AC3).
+- **The empty sequence.** A failure not caused by the commands must shrink to the
+  empty sequence (SPEC-002 AC5).
+- **Cloning isolates candidates.** A command carrying mutable state must not leak
+  between successive candidates (SPEC-002 AC6, D006).
+- **Non-determinism aborts.** A system whose executed path diverges on replay must
+  abort shrinking and report non-determinism, never a "minimal" sequence derived
+  from unstable runs (SPEC-002 AC8).
+- **Budget-limited shrink.** A reducible failure under a tight budget returns the
+  best sequence found so far, flagged as budget-limited rather than minimal
+  (SPEC-002 AC9).
+- **Initial-state-dependent bug (SPEC-005 AC8).** A bug that fires only for one
+  specific generated initial state. The shrunk counterexample must **name that
+  initial state and hold it fixed** — the shrinker re-runs every candidate through
+  `setup` with the same initial state that failed, never re-drawing it. Neither
+  dogfood example reaches this (both pass), so it has no coverage without a planted
+  case here. Surfaced while porting example 2.
