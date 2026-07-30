@@ -46,16 +46,15 @@ final class Cmd implements Command
     }
 }
 
-it('drops skipped and never-reached commands without running a candidate (SPEC-002 AC3)', function () {
+it('drops non-executed commands by reading the record, without running a candidate (SPEC-002 AC3)', function () {
+    // Only b executed and failed; a was skipped (precondition false) and c was never reached (after
+    // the failure). Both meanings of a false position drop out, leaving b.
     $failing = [
-        new GeneratedValue(new Cmd('a')),
-        new GeneratedValue(new Cmd('b')), // skipped: precondition false
-        new GeneratedValue(new Cmd('c')), // executed, and failed here
-        new GeneratedValue(new Cmd('d')), // never reached (after the failure at c)
+        new GeneratedValue(new Cmd('a')), // skipped: precondition false
+        new GeneratedValue(new Cmd('b')), // executed, and failed here
+        new GeneratedValue(new Cmd('c')), // never reached (after the failure at b)
     ];
-    // The original failing run: a ran, b was skipped, c ran and failed, d was never reached. Both
-    // meanings of `false` occur, so neither drop path is left untested.
-    $original = new RunResult(false, [true, false, true, false], new Failure(FailureKind::PostconditionFalse, 2, Cmd::class));
+    $original = new RunResult(false, [false, true, false], new Failure(FailureKind::PostconditionFalse, 1, Cmd::class));
 
     $freshSutCalls = 0;
     $freshSut = function () use (&$freshSutCalls): stdClass {
@@ -67,17 +66,19 @@ it('drops skipped and never-reached commands without running a candidate (SPEC-0
     $result = (new SequenceShrinker)->shrink(
         $failing,
         $original,
-        Gen::constant(new Cmd('unused')), // the alphabet is not touched at this stage
+        Gen::constant(new Cmd('unused')),
         $freshSut,
         null,
     );
 
-    // Both the skipped (b) and never-reached (d) commands are gone; a and c remain, in order.
-    expect(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['a', 'c']);
+    // Both the skipped (a) and never-reached (c) commands are gone; b remains.
+    expect(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['b']);
 
-    // The discriminator: the drop was read from `executed`, not discovered by trying. A shrinker
-    // that removed each command and re-ran to see if the failure survived would call freshSut; this
-    // one calls it zero times and runs zero candidates.
+    // The claim is specifically about the FILTER: it drops non-executed commands by reading
+    // `executed`, running nothing to discover the drop. (A trial-and-error shrinker would call
+    // freshSut per command.) A single-command representation has no further reduction to generate,
+    // so no candidate runs and this stays true once the shrink loop exists — the drop's zero
+    // executions are not entangled with the loop's.
     expect($freshSutCalls)->toBe(0)
         ->and($result->executions)->toBe(0);
 })->group('SPEC-002');

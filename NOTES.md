@@ -973,3 +973,25 @@ the impossible: `Failure::$reason` (no channel to fulfil — the (a) failure) an
 (unreachable trigger — the (b) failure). R11 makes the two-sided fulfillability check a pre-approval
 gate, the cheap-before half of the three-sided traceability check that otherwise runs only at
 `implemented`.
+
+## Step 32 — AC3 test revised: a third kind of test-defect (conflated properties) (2026-07-30)
+
+Building AC2's loop showed that AC3's test asserted `freshSut === 0` and `executions === 0` over the
+*whole* shrink. That held only because the loop did not exist yet: with no loop, `shrink()` was just
+the filter, so "the drop runs nothing" and "the whole shrink runs nothing" were the same number. Add
+the loop and they diverge — the loop runs candidates to reduce — and the old assertion breaks.
+
+AC3's claim is about the **filter** (the drop is read from `executed`, not discovered by trying), not
+about `shrink()` as a whole. The old test conflated the two. Revised to a single-executed-command
+scenario (`executed = [false, true, false]` → filtered to one command), where no further reduction is
+even generated, so the filter's zero executions are cleanly observable and stay true once the loop
+exists. Committed **on its own, green on the current (loopless) shrinker**, before AC2 — so the new
+assertion is shown to hold on its own merit, not attributed to the loop that forced the revision
+(§2: a test change must not ride in the commit of the code that broke it). The spec text carried the
+same ambiguity and now says "the claim is about the filter".
+
+This is a **third kind of test-defect**, beside the two vacuum cases (an assertion that tests nothing;
+a narrowing guard that silently passes): an assertion that **accidentally conflated two properties
+because one of them did not exist yet**. It reads as a real test and passes for the wrong reason —
+green by the absence of behaviour, not by the behaviour itself. Watch for it whenever a later step
+adds behaviour an earlier test implicitly assumed absent.

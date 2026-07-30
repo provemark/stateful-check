@@ -111,7 +111,11 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
     or never reached (after the failure)
   - When shrinking begins
   - Then those commands are absent from the shrink representation and from the
-    returned counterexample, without any candidate being executed to discover it.
+    returned counterexample. The claim is specifically about **the filter**: the drop
+    is determined by reading `executed`, running no candidate to discover it — as
+    distinct from the later reduction loop (AC2 onward), which does run candidates. The
+    two must not be conflated: the drop's zero executions are the filter's, not the
+    whole shrink's.
 
 - **AC4 — the last executed command is always retained**
   - Given any structural reduction candidate
@@ -294,7 +298,7 @@ least one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | cross-cutting invariant (R2) — asserted in every shrinker test and proven by AC7; row lists the covering tests once they exist | the R2 postcondition, not a distinct symbol |
 | AC2                  | —                           | —                    |
-| AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops skipped and never-reached commands…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
+| AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops non-executed commands by reading the record…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
 | AC4                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "every structural candidate retains the last executed command" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::candidateReductions` |
 | AC5                  | removed (D022) — the empty-sequence probe's trigger is unreachable in this model | n/a |
 | AC6                  | —                           | —                    |
