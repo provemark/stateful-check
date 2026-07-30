@@ -33,6 +33,11 @@ All notable changes to this project are documented here. Format follows
 
 ### Removed
 
+- `Failure::$reason` and AC2's promise of "an optional human-readable reason". A
+  spec defect surfaced by the traceability check: `postCondition` returns a `bool`,
+  so no command can ever supply a reason — the AC promised a field the contract
+  cannot fill. Never populated, never tested; removed from AC2 and `Failure` until
+  a message channel (and its filling mechanism) exists.
 - `Source::fork()` from SPEC-003. Unused, and it carried an unverified assumption
   about `Randomizer` clone semantics (D010).
 - The opt-in `Cloneable` interface from SPEC-001. Every command is now

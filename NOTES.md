@@ -803,3 +803,38 @@ factory so the properties do not move together: `$freshSut()` inside the loop fa
 "exactly once" test (identity holds, same object returned); `clone $sut` before `run()` fails only
 the "never replaced" test (the count stays one). One same-object factory kind, two tests — the
 AC3 isolation discipline, adapted so each mutant measures exactly one property.
+
+## Step 26 — a spec defect: an AC promised a field the contract cannot fill (2026-07-30)
+
+Finalising SPEC-001 for `implemented`, the contract inventory (every field/enum-case checked
+against an AC and a test) turned up `Failure::$reason`: AC2 prescribed "an optional human-readable
+reason", but nothing fills it. The runner builds a four-argument `Failure`; no test touches it; and
+crucially there is **no channel** by which a command could ever supply one — `postCondition`
+returns a `bool`. The AC promised a field the contract has no path to populate.
+
+Resolved as an amendment to AC2, not a §4 dead-code sweep: the promise leaves the spec text, not
+only the field the code. Three options and why (b): (a) add a mechanism — needs a contract change
+(a richer `postCondition` return), unneeded by the dogfood examples; (c) keep it as extension space
+— conflicts with an AC that says a failure *carries* it; (b) remove from AC2 and `Failure`, and
+reintroduce with its filling mechanism if a message channel is ever wanted. Recorded as a spec
+defect caught by taking traceability seriously.
+
+Contrast with `Outcome::$value`, also unread by the runner and untested here: that one has a
+mechanism (`Outcome::returned`) and a real consumer — dogfood example 2's `read` postcondition
+asserts on the returned report — so its coverage belongs to the examples port (§5), not a
+SPEC-001 unit test (which, since the spy supplies the value, would be a tautology). "Named by an AC
+but unfillable" and "built with a consumer elsewhere" are different classes; only the first is a
+defect.
+
+Forward-gate observation (the general lesson): the check that caught this — *is there a path by
+which this promise can be fulfilled?* — is answerable when an AC is written, not only at
+traceability, and it is the same cheap-before / expensive-after shape as R10. I am **not** promoting
+it to R11 yet: R10 became a hard rule only after the same defect struck twice (D017, D019), and this
+is one occurrence. Kept as this observation, ready to become R11 the moment a second AC promises
+something the contract cannot deliver. Promoting on n=1 would itself violate the discipline of not
+adding a rule before it is earned.
+
+Process note (decided, left to rest): no pre-commit hook. `composer check` as an explicit, visible
+step before committing beats an invisible gate that gets bypassed with `--no-verify` one day. The
+earlier gate-slip came from putting `check` and `git commit` in one shell line; the lesson is to
+keep them separate commands, not to automate.

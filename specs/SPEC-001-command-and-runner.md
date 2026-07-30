@@ -9,6 +9,7 @@
 | Amended    | maurice, 2026-07-30 — `SequenceRunner::run` sketch brought in line with D001: `@template TModel`, `@template TSut`, `list<Command<TModel, TSut, mixed>>`, `callable(): TSut`. The bare `list<Command>` predated D001 and was never revisited; a concrete system type (dogfood example 2's `Ref`) would not type-check against it. No new decision — consistency fix. |
 | Amended    | maurice, 2026-07-30 — AC4's "Then" sharpened from "in a form SPEC-002 can filter on and replay against" to two named properties: `executed` is total and index-aligned (`count(executed) === count($commands)`, padding included — the filter form, SPEC-002 AC3), and it is replayable given a deterministic system (the baseline SPEC-002 AC8 measures divergence against). AC4 **records existing but previously unspecified behaviour**, not new behaviour: the padding that makes totality hold was built at AC2 without a test and without being stated anywhere as intended — incidental behaviour that happened to be correct. AC4 makes it a guarantee. No new decision. |
 | Amended    | maurice, 2026-07-30 — AC7's "Then" sharpened to name the runner's part explicitly: `freshSut()` is called exactly once, and the same handle instance (identity, not equal content) is threaded and passed throughout. Introduces `Ref` (a mutable handle, required by dogfood example 1). The runner needs no change — the handle behaviour AC7 pins is **intended-but-unspecified**: calling `freshSut()` outside the loop and never reassigning `$sut` was a deliberate choice at AC1, only never written down. (A firmer footing than AC4's incidental padding.) No new decision. |
+| Amended    | maurice, 2026-07-30 — AC2's "Then" no longer prescribes "an optional human-readable reason", and `Failure::$reason` is removed. A **spec defect surfaced by the traceability check**, not dead-code cleanup: `postCondition` returns a `bool`, so there is no channel by which a command could ever supply a reason — the AC promised a field the contract cannot fill. It was never populated (the runner builds a four-argument `Failure`) and never tested. If a message channel is ever added, a reason returns with the mechanism that fills it and a test. No new decision. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -141,9 +142,8 @@ value.
     model disagreeing
   - When the runner executes it
   - Then execution stops at *k*, and the result carries a `Failure` with kind
-    `PostconditionFalse`, the failing index, the command's class, the model
-    before and after the transition, and an optional human-readable reason that
-    is **not** part of failure identity.
+    `PostconditionFalse`, the failing index, and the command's class, plus the model
+    before and after the transition.
   - **Precedence rule:** `FailureKind` is decided by whether `run()` threw, not
     by the postcondition. Returned normally + postcondition false →
     `PostconditionFalse`. Threw + postcondition false → `UnexpectedException`
@@ -243,7 +243,7 @@ enum FailureKind
 /**
  * Structured so SPEC-002 AC1 can ask "did the shrunk sequence fail for the same
  * reason" without comparing messages, which legitimately differ after shrinking.
- * Identity is kind + commandClass + exceptionClass; $reason is for humans only.
+ * Identity is kind + commandClass + exceptionClass.
  */
 final readonly class Failure
 {
@@ -252,10 +252,9 @@ final readonly class Failure
         public int $index,
         public string $commandClass,
         public ?string $exceptionClass = null,
-        public ?string $reason = null,
     ) {}
 
-    /** Identity comparison for SPEC-002 AC1. Ignores index and reason. */
+    /** Identity comparison for SPEC-002 AC1. Ignores index. */
     public function sameKindAs(self $other): bool;
 }
 
