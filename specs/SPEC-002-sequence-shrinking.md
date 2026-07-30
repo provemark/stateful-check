@@ -278,7 +278,7 @@ least one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
+| AC1                  | cross-cutting invariant (R2) — asserted in every shrinker test and proven by AC7; row lists the covering tests once they exist | the R2 postcondition, not a distinct symbol |
 | AC2                  | —                           | —                    |
 | AC3                  | —                           | —                    |
 | AC4                  | —                           | —                    |

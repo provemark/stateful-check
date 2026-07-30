@@ -910,3 +910,33 @@ SPEC-003 → `implemented`. Three-sided check run: AC1–AC3 and AC5 each map to
 deliverable (sequence-length generator) was removed, not left dangling. The AC number 5 is kept
 (not renumbered to 4) so it stays consistent with commit c30f7e2 and this Step's narrative; the AC4
 slot is a documented redirect rather than a renumber.
+
+## Step 29 — SPEC-002 build: AC1 is an invariant, and AC order is not numeric (2026-07-30)
+
+Starting SPEC-002 (approved). Two structural decisions before the first AC.
+
+**AC1 is a cross-cutting invariant, not a build step.** "The returned sequence still fails, with the
+same failure identity" (R2) is passed vacuously by a no-op shrinker that returns its input — so it
+cannot be a first step tested against nothing. It is instead a standing assertion in *every*
+shrinker test: whatever a test shrinks, the result is re-run and must still fail `sameKindAs` the
+original. Its traceability row lists the tests that jointly cover it rather than a single test, and
+AC7 (a planted bug shrunk to a known minimum) is where it is proven non-vacuously. This resolves the
+vacuum structurally instead of per step.
+
+**AC order is by dependency, not number — first time this happens here.** SPEC-001 and SPEC-003 built
+AC1→ACn in order; SPEC-002 does not, because its dependency graph is not its numbering. The order:
+
+    AC10 (sameKindAs — pure Failure function, the only leaf) →
+    AC3 (filter non-executed — foundational, no candidate execution) →
+    AC5 (empty candidate) → AC4 (structural, retain last executed) →
+    AC2 (local minimum — lands last of the family group, because it requires ALL three families,
+         including the argument-reduction family, to exist before "no single further reduction
+         fails" can hold) →
+    AC6 (cloning between candidates, D021 — its mechanism is built with the first candidate run;
+         the explicit stateful-command test comes here and may be green-on-arrival) →
+    AC9 (budget) → AC8 (non-determinism replay) →
+    AC7 (meta planted-bug — the whole shrinker, and the real proof of the AC1 invariant).
+
+Corrections to the maintainer's rough order: AC2 is *after* the argument family, not beside AC5
+(it is the local-minimum guarantee over all families); AC6's cloning mechanism is early (needed for
+any correct candidate run) while its explicit test is later.
