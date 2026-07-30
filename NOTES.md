@@ -940,3 +940,14 @@ AC1→ACn in order; SPEC-002 does not, because its dependency graph is not its n
 Corrections to the maintainer's rough order: AC2 is *after* the argument family, not beside AC5
 (it is the local-minimum guarantee over all families); AC6's cloning mechanism is early (needed for
 any correct candidate run) while its explicit test is later.
+
+## Step 30 — the commit-behind-the-gate rule (n=2 promotion) (2026-07-30)
+
+The Pint gate let a failing commit through twice — both times because the commit ran as a step the
+`composer check` did not gate (once with check and commit in one shell line but the commit not
+chained behind `&&`, once similarly). Each was fixed with `--amend`, but a fix-after is not a
+process. By the same n≥2 threshold that kept the reason/alphabet/scope-item observations off the
+hard rules until they recurred (and that I used to refuse R11 at n=1), this recurred, so it is now a
+rule in CLAUDE.md §6: `composer check && git commit`, the commit literally behind the gate. Not a
+pre-commit hook — the maintainer's argument stands (an invisible gate gets bypassed with
+`--no-verify`; a visible `&&` cannot be forgotten because the shell enforces it).

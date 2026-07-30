@@ -227,6 +227,14 @@ for the API, and the honest answer to "does this abstraction earn its place".
 extension. Value objects `readonly`. No suppression of errors to make a gate
 pass.
 
+**Commit behind the gate.** Run the commit literally chained to a green check —
+`composer check && git commit …` — so a failing check makes the commit impossible
+rather than leaving vigilance to catch it. Never run the commit as a step the check
+does not gate. This is a rule, not a preference: the ungated form slipped a
+Pint-failing commit through twice (an `--amend` fix each time), which is the n=2 that
+promotes it here — the same threshold that kept R11 off at n=1. Not a pre-commit hook,
+deliberately: an invisible gate gets bypassed with `--no-verify`; a visible `&&` does not.
+
 ## 7. Writing style for docs and README
 
 Plain, specific, and honest about limits. State what the tool cannot do in the
