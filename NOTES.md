@@ -656,5 +656,29 @@ whose precondition fails is skipped and drops from the shrink representation (R1
 shrunk counterexample can contain zero executed commands even though the generated length
 was ≥ 1. Consistent; just not what "at least one" leads a reader to expect.
 
-## Step 20 —
+## Step 20 — TResult invariance defect fixed before the contract-commit (2026-07-30)
+
+Starting SPEC-001, the maintainer flagged that `Command` was about to repeat D017: with
+`@template TResult` invariant and `Outcome<TResult>` in `postCondition`, `TResult` is pinned
+invariant, and dogfood example 2's alphabet mixes `sign` (result `null`) with `read` (result
+a report). Verified statically first, with a throwaway check file holding
+`list<Command<ChkModel, ChkSut, mixed>> = [new SignChk, new ReadChk]` at PHPStan max. It
+failed exactly as predicted: `chkAlphabet() should return list<Command<…, mixed>> but returns
+array{SignChk, ReadChk}`. So the defect was real, not theoretical — the same class as D017,
+one layer up.
+
+Fix (D019): `TResult` → `@template-covariant`, `Outcome` → non-generic. Two false starts
+worth recording, because they show why *non-generic* rather than *covariant* `Outcome`:
+- making `Outcome` covariant fails — `returned(T $value)` puts `T` in a parameter position,
+  which covariance forbids (the constructor is exempt, a factory is not);
+- making it invariant `Outcome<mixed>` fails — `threw()` returns `Outcome<null>`, and invariant
+  `Outcome<null>` ≠ `Outcome<mixed>`.
+Non-generic sidesteps both: the postcondition always saw the value as `mixed` anyway, so the
+type parameter bought nothing. Literal note for later: D019 talks about "widening to
+`Outcome<mixed>`" by analogy to D017, but the realisation is a plain non-generic `Outcome` —
+the two above are why.
+
+After the fix: project `composer check` green (34 pass), and the throwaway re-ran clean
+(`[OK] No errors`) — the heterogeneous alphabet now type-checks. Throwaway deleted, not
+committed. SPEC-001 amended and re-approved (header + D019, referencing D017 as precedent).
 

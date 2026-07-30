@@ -346,3 +346,33 @@ generated length was ≥ 1. Consistent, but not what a reader of "at least one" 
 recorded here and in NOTES so it is not later mistaken for a contradiction.
 Revisit if: a use appears for generating the empty sequence directly (none is known;
 SPEC-002 already owns the empty case).
+
+## D019 — Command's TResult is covariant; Outcome is non-generic
+
+Spec: SPEC-001, `Command` interface and `Outcome` (amendment)
+Status: **decided**
+Decided: maurice, 2026-07-30
+Decision: `Command`'s `TResult` is `@template-covariant`, and `Outcome` is not generic in
+its value. `TResult` then appears only in `run(): TResult`, which covariance requires; the
+postcondition receives a plain `Outcome` (value `mixed`) and narrows it at runtime if it
+needs the type. This is the same fix as D017, applied to the same defect class one layer up.
+Alternative rejected (a): keep `TResult` invariant and let the postcondition carry
+`Outcome<TResult>`. Rejected because a heterogeneous alphabet — dogfood example 2 mixes
+`sign` (result `null`) with `read` (result a report) as `list<Command<M, S, mixed>>` — then
+does not type-check under PHPStan max, since an invariant `Command<M, S, null>` is not a
+`Command<M, S, mixed>`. Verified against a throwaway check file before the amendment:
+`chkAlphabet() should return list<Command<…, mixed>> but returns array{SignChk, ReadChk}`.
+Alternative rejected (b): make `Outcome` covariant instead of non-generic, keeping
+`Outcome<TResult>`. Impossible: its `returned(T $value)` factory puts `T` in a parameter
+position, which covariance forbids; and an invariant `Outcome<mixed>` fails on `threw()`,
+which returns `Outcome<null>`. A non-generic `Outcome` sidesteps both — the value was always
+`mixed` at the postcondition regardless, so a type parameter bought nothing.
+Because: the trigger was concrete and identical in shape to D017 — an invariant generic
+parameter blocks the heterogeneous collection the dogfood examples require (§4), and
+`examples/` being outside the PHPStan paths would have concealed it. Covariance on the one
+output-only parameter restores the subtyping the alphabet needs.
+Revisit if: the runtime narrowing in postconditions proves error-prone, as with D017. The
+cost is the same trade, and sharper here: `run()`'s result type no longer flows into the
+observation contract statically — the postcondition sees `mixed` and must narrow. If a
+symbolic-results design ever ties `run()`'s output to later commands (R9a), revisit whether
+that observation contract should be typed again.

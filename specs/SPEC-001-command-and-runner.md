@@ -5,6 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-30                               |
+| Amended    | maurice, 2026-07-30 — `Command`'s `TResult` made `@template-covariant`, and `Outcome` made non-generic, so an alphabet may mix commands of different result types as `list<Command<M, S, mixed>>` (dogfood example 2: `sign` → null, `read` → report). `postCondition` now receives a non-generic `Outcome` and narrows the value if it needs the type. Same defect class as D017; recorded as D019. Re-approved on the same date. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -203,24 +204,22 @@ Illustrative only.
  * A command that expects to throw asserts on this in its own postCondition, so
  * an expected error is ordinary behaviour (AC5).
  *
- * @template T
+ * Not generic in the value (D019). `postCondition` sees the outcome without the
+ * command's `TResult`, so the value is always `mixed`; a command that needs its
+ * result's type narrows it. A type parameter could not be covariant anyway — the
+ * `returned()` factory would put it in a parameter position — so it would only
+ * force `TResult` invariant again, which is the defect D019 removes.
  */
 final readonly class Outcome
 {
-    /** @param T|null $value */
     private function __construct(
         public bool $threw,
         public mixed $value = null,
         public ?Throwable $exception = null,
     ) {}
 
-    /**
-     * @param  T  $value
-     * @return self<T>
-     */
     public static function returned(mixed $value): self;
 
-    /** @return self<mixed> */
     public static function threw(Throwable $e): self;
 }
 
@@ -260,14 +259,20 @@ final readonly class Failure
  * Three type parameters carry the model, the system handle, and the value run()
  * returns. A user binds them once with `@implements Command<MyModel, MySut,
  * MyResult>` above the class; PHPStan then types all four methods, so no per-method
- * annotation is needed (D001). `TResult` also ties run()'s return to the `Outcome`
- * the postcondition inspects (the observation contract), though it cannot force
- * that value to equal the model's own observable. A user who wants none of this may
- * still bind `mixed`.
+ * annotation is needed (D001). A user who wants none of this may still bind `mixed`.
+ *
+ * `TResult` is covariant (D019): it appears only in run()'s return, so a
+ * `Command<M, S, null>` is a `Command<M, S, mixed>`, and an alphabet may mix
+ * commands of different result types as `list<Command<M, S, mixed>>` (dogfood
+ * example 2: `sign` returns null, `read` returns a report). The price is that the
+ * postcondition receives a non-generic `Outcome` and narrows the value itself; the
+ * result type can no longer flow into the observation contract statically. Same
+ * defect class as the invariant `Generator` at D017.
  *
  * @template TModel
  * @template TSut
- * @template TResult
+ *
+ * @template-covariant TResult
  */
 interface Command
 {
@@ -301,9 +306,11 @@ interface Command
      * keep reads cheap. Anything that may throw belongs in run(), because only
      * the runner's invocation is wrapped into an Outcome.
      *
-     * @param  TModel            $model
-     * @param  TSut              $sut
-     * @param  Outcome<TResult>  $outcome
+     * The outcome is a non-generic `Outcome` (its value is `mixed`), not tied to
+     * TResult, so that TResult stays covariant (D019).
+     *
+     * @param  TModel  $model
+     * @param  TSut    $sut
      */
     public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool;
 

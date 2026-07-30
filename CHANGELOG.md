@@ -106,3 +106,9 @@ All notable changes to this project are documented here. Format follows
   which the alphabet builds. AC4 sharpened from "at most n" to "between 1 and n" — the
   length generates in `[1, n]` and never produces the empty sequence, which is SPEC-002's
   own candidate.
+- SPEC-001 amended and re-approved (maurice, 2026-07-30): `Command`'s `TResult` made
+  `@template-covariant` and `Outcome` made non-generic (D019), so a heterogeneous alphabet
+  — dogfood example 2 mixes `sign` (result `null`) with `read` (result a report) — type-checks
+  as `list<Command<M, S, mixed>>` under PHPStan max. The postcondition now receives a
+  non-generic `Outcome` and narrows the value if it needs the type. Same defect class as
+  D017, verified against a throwaway check before the amendment.
