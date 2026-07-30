@@ -6,6 +6,7 @@
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-30                               |
 | Amended    | maurice, 2026-07-30 — `Command`'s `TResult` made `@template-covariant`, and `Outcome` made non-generic, so an alphabet may mix commands of different result types as `list<Command<M, S, mixed>>` (dogfood example 2: `sign` → null, `read` → report). `postCondition` now receives a non-generic `Outcome` and narrows the value if it needs the type. Same defect class as D017; recorded as D019. Re-approved on the same date. |
+| Amended    | maurice, 2026-07-30 — `SequenceRunner::run` sketch brought in line with D001: `@template TModel`, `@template TSut`, `list<Command<TModel, TSut, mixed>>`, `callable(): TSut`. The bare `list<Command>` predated D001 and was never revisited; a concrete system type (dogfood example 2's `Ref`) would not type-check against it. No new decision — consistency fix. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -343,7 +344,17 @@ final readonly class RunResult
 
 final class SequenceRunner
 {
-    /** @param list<Command> $commands */
+    /**
+     * A sequence runs commands sharing one model type and one system type; only their
+     * result types vary, which the covariant TResult absorbs (bound to mixed here).
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<Command<TModel, TSut, mixed>>  $commands
+     * @param  callable(): TSut  $freshSut
+     * @param  TModel  $initialModel
+     */
     public function run(array $commands, callable $freshSut, mixed $initialModel): RunResult;
 }
 ```
@@ -385,7 +396,7 @@ least one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
+| AC1                  | tests/Unit/SequenceRunnerTest.php :: "runs a passing sequence to completion…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC2                  | —                           | —                    |
 | AC3                  | —                           | —                    |
 | AC4                  | —                           | —                    |

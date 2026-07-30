@@ -688,3 +688,24 @@ published (gitignored)" header line is removed — it was never actually in `.gi
 the repo unreadable. R10 (the heterogeneous-generics gate, from the D017/D019 pattern) is
 committed with this change.
 
+## Step 21 — AC1 runner; a stale sketch surfaced (2026-07-30)
+
+AC1 implemented: the smallest `SequenceRunner::run` that walks a passing sequence and reports
+success. `preCondition` and `postCondition` are invoked but their results are not acted on —
+skipping on a false precondition is AC3, stopping on a false postcondition is AC2 — each with
+a comment so the omission is not mistaken for a bug. Spy-command test proves call order and
+that the postcondition sees the post-transition model (`post === pre + 1`).
+
+Implementing it exposed a stale sketch: `SequenceRunner::run` was written `@param list<Command>`
+(bare), which does not type-check once a command binds a concrete model type — `TModel` is
+invariant, so `Command<int, …>` is not `Command<mixed, …>`. Fixed to the generic signature
+(`@template TModel`, `@template TSut`, `list<Command<TModel, TSut, mixed>>`, `callable(): TSut`).
+No D-number: the alternative (leave `TSut` at `mixed`) is not a real option — it is the same
+defect class as D017/D019 inverted (too narrow, not too broad), and a concrete system type
+(dogfood example 2's `Ref`) would not flow through it.
+
+Why the sketch was bare: it was written before D001, when `@template` was out of scope, and
+was not revisited when D001 reversed that. That is a signal — other API sketches (PropertyResult,
+StatefulProperty, Ref) may also predate a decision. Walk the remaining sketches for the same
+staleness at a convenient point, before their specs are built.
+
