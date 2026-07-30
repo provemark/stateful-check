@@ -709,3 +709,18 @@ was not revisited when D001 reversed that. That is a signal — other API sketch
 StatefulProperty, Ref) may also predate a decision. Walk the remaining sketches for the same
 staleness at a convenient point, before their specs are built.
 
+## Step 22 — AC2 structured failure; a narrowing pattern for nullable result fields (2026-07-30)
+
+AC2 implemented (see the commit). One test-quality note worth fixing forward: asserting on a
+nullable result field (`RunResult::$failure` is `?Failure`) tempts an
+`if (! $failure instanceof Failure) return;` guard to satisfy PHPStan. That guard narrows, but
+on a genuinely null failure it *skips the rest of the block and the test passes* — the same
+vacuum as a test that asserts nothing, now in narrowing disguise. The pattern is instead:
+
+    $failure = $result->failure ?? throw new RuntimeException('expected a failure, got none');
+
+which narrows just as well for PHPStan but fails loudly when the field is null. AC5 and AC6
+inspect the same nullable `failure`/`exceptionClass` fields, so this is the established pattern
+there too, not a one-off. Filed with the other narrowing observations: prefer `?? throw` over a
+silent early-return whenever a test must narrow an optional before asserting on it.
+

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Provemark\StatefulCheck\Command;
-use Provemark\StatefulCheck\Failure;
 use Provemark\StatefulCheck\FailureKind;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\SequenceRunner;
@@ -154,11 +153,11 @@ it('stops at the first failing postcondition and reports a structured failure', 
     // The precedence rule speaks here for the first time instead of being a tautology:
     // run() returned normally, so kind is PostconditionFalse and exceptionClass is null.
     // The throw path (AC6) is the case that would make both differ.
-    $failure = $result->failure;
-    expect($failure)->not->toBeNull();
-    if (! $failure instanceof Failure) {
-        return; // unreachable: the assertion above fails the test first. Narrows for PHPStan.
-    }
+    // `?? throw` narrows $failure to non-null for PHPStan and fails loudly if it is null,
+    // where an `if (! instanceof) return` would silently pass the whole assertion block.
+    // This is the pattern for the same situation in AC5/AC6.
+    $failure = $result->failure ?? throw new RuntimeException('expected a failure, got none');
+
     expect($failure->kind)->toBe(FailureKind::PostconditionFalse)
         ->and($failure->index)->toBe(1)
         ->and($failure->commandClass)->toBe(SpyCommand::class)
