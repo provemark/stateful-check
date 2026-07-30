@@ -408,7 +408,7 @@ least one test; every source file maps back to this spec.
 | AC2                  | tests/Unit/SequenceRunnerTest.php :: "stops at the first failing postcondition…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run; src/Failure.php; src/FailureKind.php; src/RunResult.php |
 | AC3                  | tests/Unit/SequenceRunnerTest.php :: "skips a command whose precondition is false…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC4                  | tests/Unit/SequenceRunnerTest.php :: "records a total, index-aligned, replayable execution path" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
-| AC5                  | —                           | —                    |
+| AC5                  | tests/Unit/SequenceRunnerTest.php :: "catches an expected exception…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |
 | AC8                  | —                           | —                    |

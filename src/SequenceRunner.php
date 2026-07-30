@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Provemark\StatefulCheck;
 
+use Throwable;
+
 /**
  * Executes a command sequence against a system and a shadow model (SPEC-001).
  *
@@ -43,7 +45,20 @@ final class SequenceRunner
                 continue;
             }
 
-            $outcome = Outcome::returned($command->run($sut));
+            try {
+                $outcome = Outcome::returned($command->run($sut));
+            } catch (Throwable $e) {
+                // Catch Throwable, not only Exception: a TypeError, a call on null, a division
+                // by zero in the system under test is a real bug this tool exists to find, so it
+                // is wrapped into the Outcome for the postcondition to judge and (AC6) the
+                // shrinker to minimise, rather than crashing the run. The deliberate cost is that
+                // a genuine infrastructure Error is also treated as a finding — an unexpected
+                // throw of any kind is a test failure. `Outcome::threw` already types this Throwable.
+                $outcome = Outcome::threw($e);
+            }
+
+            // nextState runs whether or not run() threw: the transition is pure and predicts the
+            // model's next state independently of what actually happened (R6).
             $modelBefore = $model;
             $model = $command->nextState($model);
             $executed[] = true;

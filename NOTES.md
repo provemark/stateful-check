@@ -749,3 +749,31 @@ is this kind (unspecified behaviour being pinned down, worth an AC) or genuinely
 an existing test (not worth one). Non-vacuity is shown by mutation — remove the padding and the
 totality assertion fails — since there is no unimplemented behaviour to make it red first.
 
+## Step 24 — AC5 throw path; two clarifications (2026-07-30)
+
+AC5 implemented: `run()` is wrapped in `try/catch`, a throw becomes `Outcome::threw`, and the
+run continues if the postcondition accepts it. `nextState` runs on the throw path too (R6 — the
+transition ignores what actually happened), first really exercised here; a mutant that logs
+`nextState` but discards its advance on a throw is caught by the model assertion alone.
+
+Two things worth stating so they are not misread later:
+
+1. **The precedence rule does not fire at AC5.** AC2's precedence rule classifies a `FailureKind`
+   by whether `run()` threw. AC5 produces no `Failure` — its path is "postcondition accepts the
+   throw → continue" — so no kind is classified here. What comes alive at AC5 is the
+   `Outcome::threw` state: the postcondition sees `outcome->threw === true` for the first time.
+   The precedence rule only *distinguishes* at AC6, where the same postcondition-false yields
+   `UnexpectedException` instead of `PostconditionFalse` depending on whether `run()` threw. Until
+   AC6, the runner's failure branch stays hardcoded `PostconditionFalse`; AC6 fixes the
+   classification.
+
+2. **The runner catches `Throwable`, not just `Exception` (deliberate).** A `TypeError`, a call on
+   null, a `DivisionByZeroError` in the system under test is a real, order-dependent bug this tool
+   exists to find — so it is wrapped and (AC6) shrunk to a minimal reproducer rather than crashing
+   the run. This means **programming errors in the system are treated as findable bugs, not
+   infrastructure failures**: an unexpected `Error` becomes an `UnexpectedException` finding the
+   shrinker works on. The trade is accepted because an unexpected throw of any kind is a test
+   failure, and it is consistent with `Outcome::threw(Throwable $exception)`, which already types
+   its argument as `Throwable` — so this is a consistency confirmation, not a standalone decision
+   (no D-number).
+

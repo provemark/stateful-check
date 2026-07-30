@@ -32,11 +32,15 @@ final class CallLog
  */
 final class SpyCommand implements Command
 {
+    /** The outcome this command's postcondition last received (AC5 capture). */
+    public ?Outcome $lastOutcome = null;
+
     public function __construct(
         private string $label,
         private CallLog $log,
         private bool $preconditionHolds = true,
         private bool $postconditionHolds = true,
+        private ?Throwable $runThrows = null,
     ) {}
 
     public function preCondition(mixed $model): bool
@@ -49,6 +53,10 @@ final class SpyCommand implements Command
     public function run(mixed $sut): mixed
     {
         $this->log->record($this->label, 'run', null);
+
+        if ($this->runThrows !== null) {
+            throw $this->runThrows;
+        }
 
         return null;
     }
@@ -69,6 +77,7 @@ final class SpyCommand implements Command
     public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
     {
         $this->log->record($this->label, 'post', $model);
+        $this->lastOutcome = $outcome;
 
         return $this->postconditionHolds;
     }
@@ -235,4 +244,51 @@ it('records a total, index-aligned, replayable execution path', function () {
     // AC8 measures a divergence against. It is conditional on determinism, which the spies are.
     $replay = (new SequenceRunner)->run($commands, fn () => new stdClass, 0);
     expect($replay->executed)->toBe($result->executed);
+})->group('SPEC-001');
+
+it('catches an expected exception, passes it to the postcondition, and continues', function () {
+    $log = new CallLog;
+    $boom = new RuntimeException('boom');
+    $b = new SpyCommand('b', $log, runThrows: $boom);
+    $commands = [
+        new SpyCommand('a', $log),
+        $b,
+        new SpyCommand('c', $log),
+    ];
+
+    // If the runner did not catch, $boom would propagate out of this call and there would be
+    // no RunResult at all. Getting one back is itself the proof the exception was caught.
+    $result = (new SequenceRunner)->run($commands, fn () => new stdClass, 0);
+
+    // The run continued and did not fail: b's nextState/postCondition still ran, and c ran fully.
+    expect($result->passed)->toBeTrue()
+        ->and($result->failure)->toBeNull()
+        ->and($result->executed)->toBe([true, true, true]);
+
+    $trace = array_map(fn (array $e): string => "{$e[0]}.{$e[1]}", $log->events);
+    expect($trace)->toBe([
+        'a.pre', 'a.run', 'a.next', 'a.post',
+        'b.pre', 'b.run', 'b.next', 'b.post',
+        'c.pre', 'c.run', 'c.next', 'c.post',
+    ]);
+
+    // The exception was wrapped into the Outcome and handed to b's postcondition — not a
+    // returned outcome. `?? throw` narrows and fails loudly if b saw nothing (the AC2 pattern).
+    $outcome = $b->lastOutcome ?? throw new RuntimeException('b saw no outcome');
+    expect($outcome->threw)->toBeTrue()
+        ->and($outcome->exception)->toBe($boom);
+
+    // nextState runs on the throw path too (R6: the transition ignores what actually happened).
+    // Had it been skipped, the model would lag the system by one step — the hazard in the design
+    // notes. b enters at model 1, so its post-transition model is 2, and c then sees 2.
+    $modelOf = function (string $label, string $method) use ($log): int {
+        foreach ($log->events as [$l, $m, $model]) {
+            if ($l === $label && $m === $method && $model !== null) {
+                return $model;
+            }
+        }
+        throw new RuntimeException("no model logged for {$label}.{$method}");
+    };
+    expect($modelOf('b', 'post'))->toBe(2)
+        ->and($modelOf('c', 'pre'))->toBe(2);
 })->group('SPEC-001');
