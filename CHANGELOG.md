@@ -48,6 +48,14 @@ All notable changes to this project are documented here. Format follows
 
 ### Changed
 
+- SPEC-001 (command contract and runner) is `implemented`: all eight acceptance
+  criteria traced to tests over `SequenceRunner`, `Command`, `Outcome`, `Failure`,
+  `FailureKind`, `RunResult` and `Ref`. Includes AC5/AC6 (the runner catches
+  `Throwable` and classifies a thrown-and-rejected outcome as `UnexpectedException`
+  carrying the concrete exception class, D020), AC7 (`Ref` handle threaded, never
+  replaced) and AC8 (the postcondition observes the system up to and including the
+  command). `composer check` green across the suite.
+
 - Specs revised after reading fast-check's `CommandsArbitrary` source. Candidate
   re-validation dropped (unnecessary: skipped preconditions cannot make a
   shortened sequence ill-formed); shrinking now filters to executed commands.

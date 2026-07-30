@@ -838,3 +838,20 @@ Process note (decided, left to rest): no pre-commit hook. `composer check` as an
 step before committing beats an invisible gate that gets bypassed with `--no-verify` one day. The
 earlier gate-slip came from putting `check` and `git commit` in one shell line; the lesson is to
 keep them separate commands, not to automate.
+
+## Step 27 — AC8 and SPEC-001 implemented (2026-07-30)
+
+AC8 (postcondition observes the system) closed SPEC-001. Test-only, green on arrival — the runner
+has handed the post-run `$sut` to the postcondition since AC1, so this is the same
+intended-but-unspecified kind as AC7. The falsifiable part is "including": the postcondition sees
+the state after *this* command's `run()`, which the shared handle (AC7) alone does not establish.
+Non-vacuity by the snapshot mutant — `clone $sut` before `run`, pass the clone to `postCondition`
+— which fails only the AC8 test (SpyCommand ignores `$sut`, AppendCommand records it in `run`), so
+it isolates the one claim.
+
+"Do not mutate the system" is written as an unenforceable D011 convention in the `postCondition`
+docblock, not an AC8 guarantee: the runner cannot stop a mutating postcondition, and pretending
+otherwise would be the kind of false guarantee this package exists to avoid.
+
+SPEC-001 status → `implemented`. All eight ACs traced (AC → test → source). `composer check` green
+across the whole suite. Next in ROADMAP: the dogfood examples port (§5), then SPEC-002.

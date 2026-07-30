@@ -150,6 +150,49 @@ final class AppendCommand implements Command
     }
 }
 
+/**
+ * A command whose postcondition asserts on system state rather than on run()'s return: it appends
+ * its tag in run(), then records what `$sut->value` reads at postcondition time. That reading must
+ * reflect this command's own mutation, not the state before it (AC8).
+ *
+ * @implements Command<null, Ref<string>, null>
+ */
+final class ObserveCommand implements Command
+{
+    public ?string $observed = null;
+
+    public function __construct(private string $tag) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        $sut->value = $sut->value.$this->tag;
+
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        $this->observed = $sut->value;
+
+        return true;
+    }
+
+    public function __toString(): string
+    {
+        return "observe({$this->tag})";
+    }
+}
+
 it('runs a passing sequence to completion, each postcondition seeing the post-transition model', function () {
     $log = new CallLog;
     $commands = [
@@ -461,4 +504,23 @@ it('threads one handle to every command and never replaces it', function () {
         ->and($ref->value)->toBe('abc');
 
     // Each command saw the state the previous left: a, then ab, then abc.
+})->group('SPEC-001');
+
+it('lets the postcondition observe the system, reflecting mutations up to and including this command', function () {
+    $ref = new Ref('');
+    $a = new ObserveCommand('a');
+    $b = new ObserveCommand('b');
+    $c = new ObserveCommand('c');
+
+    $result = (new SequenceRunner)->run([$a, $b, $c], fn (): Ref => $ref, null);
+
+    expect($result->passed)->toBeTrue()
+        ->and($a->observed)->toBe('a')
+        ->and($b->observed)->toBe('ab')
+        ->and($c->observed)->toBe('abc');
+
+    // The falsifiable part is "including": each postcondition read the system AFTER its own run(),
+    // so it saw its own mutation. Were the postcondition given the pre-run state, a would read ''
+    // and b 'a'. This does not follow from the shared handle (AC7) — sharing the instance says
+    // nothing about whether the mutation was applied yet when the postcondition looked.
 })->group('SPEC-001');

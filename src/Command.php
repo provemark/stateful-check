@@ -57,8 +57,11 @@ interface Command
     public function nextState(mixed $model): mixed;
 
     /**
-     * $model is the state AFTER nextState. Does the system now match it? $sut is the
-     * same handle run() operated on: read it, do not mutate it (AC8, D011).
+     * $model is the state AFTER nextState. Does the system now match it? $sut is the same handle
+     * run() operated on, reflecting every mutation up to and including this command (AC8), so a
+     * postcondition may assert on system state, not only on the returned value. Read it, do not
+     * mutate it: a convention (D011) the runner cannot enforce, not a guarantee — a postcondition
+     * that mutates the system is not stopped, it just corrupts the run it is meant to check.
      *
      * The outcome is a non-generic `Outcome` (its value is `mixed`), not tied to
      * TResult, so that TResult stays covariant (D019); a command that needs its
