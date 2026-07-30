@@ -271,3 +271,24 @@ nullable parameter is what lets the contract tell "the caller said nothing" apar
 from "the caller asked for something impossible", and answer each correctly.
 Revisit if: a real need appears to pass an out-of-range origin deliberately (none
 is known), in which case the throw becomes a clamp with a documented rationale.
+
+## D016 — Integer range width must fit in a PHP int (overflow guard)
+
+Spec: SPEC-003, `integers()` (AC2)
+Status: **decided**
+Decided: maurice, 2026-07-30
+Decision: `integers($min, $max, ...)` throws at construction when the range width
+`$max − $min` would exceed `PHP_INT_MAX` — so the full unbounded range,
+`integers(PHP_INT_MIN, PHP_INT_MAX)`, is not supported in v0.1; bound the range. The
+check is made WITHOUT subtracting: `$min < 0 && $max > PHP_INT_MAX + $min`.
+Because: this is exactly the silent surprise the guard exists to prevent, and it
+bites twice. (1) `$max − $min` on the full range silently becomes a float (~1.84e19),
+so a naive width check measures nothing — hence the subtraction-free test above.
+(2) Inside `shrink`, `2 ** $k` becomes a float from k = 63 and `intdiv()` then throws
+a `TypeError`; with a near-`PHP_INT_MAX` gap, k reaches 63 — hence shrinking uses
+repeated halving (`$step = intdiv($step, 2)`), never exponentiation. Both are
+determinism breaking at the extremes, the wrong kind of surprise for a package that
+promises reproducibility. Because `$v` and the origin both lie in `[$min, $max]`,
+bounding the width keeps every `gap = $v − origin` within an int, so `shrink` is safe.
+Revisit if: a real use needs the unbounded range, which would require an
+overflow-safe midpoint instead of a width guard.

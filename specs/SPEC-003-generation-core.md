@@ -231,6 +231,6 @@ least one test; every source file maps back to this spec.
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
 | AC1                  | `tests/Unit/Generation/SourceTest.php` (group `SPEC-003`) | `src/Generation/Source.php` :: `Source` |
-| AC2                  | —                           | —                    |
+| AC2                  | `tests/Unit/Generation/IntegersGeneratorTest.php` (group `SPEC-003`) | `src/Generation/IntegersGenerator.php`, `src/Generation/Gen.php` |
 | AC3                  | —                           | —                    |
 | AC4                  | —                           | —                    |

@@ -482,5 +482,25 @@ templates and signatures either type-check or they do not. The first behaviour t
 arrives with `integers()` (AC2). Do not read this as "interfaces need no test" — it is
 specific to a contract that has no behaviour.
 
-## Step 13 —
+## Step 13 — integers() landed; the crux, and one limitation recorded (2026-07-30)
+
+AC2 done: `Gen::integers()` + `IntegersGenerator` — binary reduction toward the origin
+by repeated halving, D015 clamp/throw, D016 width guard. Green.
+
+Verified the guard and overflow tests are not vacuous, by mutation, before committing
+(none of that intermediate state committed): removing the D015 throw reddened only the
+origin-out-of-range test; removing the D016 guard reddened only the width test;
+replacing repeated halving with `2 ** $k` reddened only the gap-above-2^62 test, with
+a `TypeError` exactly as predicted. Each test pins its own guard, none coincidentally.
+
+**Known limitation, recorded not solved: uniform generation misses the interesting
+values.** `integers()` draws uniformly, so a wide range almost never yields 0, min or
+max — precisely where bugs cluster; QuickCheck-likes bias toward small values and
+edges. SPEC-003's deliberate "no bias" was about *command choice*, not integers, and
+stays. It is moot now: the dogfood suites use only `elements` and small ranges. The
+condition under which it starts to matter: a real suite draws a command argument as
+`integers()` over a wide range and relies on hitting an edge to trigger a bug — then
+edge-biasing (or a small default range) earns its own spec.
+
+## Step 14 —
 
