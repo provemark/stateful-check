@@ -117,6 +117,21 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
     state; the value is never re-drawn per candidate, which would change the system
     under the shrinker and make the result meaningless.
 
+- **AC9 — a sequence length is drawn in `[1, n]`, never zero** *(D018; was SPEC-003 AC4)*
+  - Given a maximum length *n*
+  - When the entry point draws a sequence
+  - Then its length is drawn by `Gen::integers(1, $n, origin: 1)` — always between 1 and *n*,
+    never zero, and shrinking it approaches 1. The empty sequence is deliberately never drawn
+    here: it is SPEC-002's own first shrink candidate ("did the commands cause the failure at
+    all?"), a semantically distinct step this layer does not touch (D018).
+  - *This is a convention, not a new generator: it is a usage of `integers`, whose behaviour AC2
+    of SPEC-003 already covers. What a test here pins is the choice `min: 1, origin: 1` — a
+    change to `[0, n]` or `origin: 0` must break it — guarding D018.*
+  - *Note (D018): "at least one" is about the **generated** length, not the number of commands in
+    a counterexample. A command whose precondition fails is skipped and drops out of the shrink
+    representation (R1), so a shrunk counterexample may contain zero executed commands even though
+    the drawn length was ≥ 1.*
+
 ## API sketch
 
 Illustrative only.
@@ -270,3 +285,4 @@ least one test; every source file maps back to this spec.
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |
 | AC8                  | —                           | —                    |
+| AC9                  | —                           | —                    |

@@ -2,12 +2,13 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | approved                                          |
+| Status     | implemented                                       |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-30                               |
 | Amended    | maurice, 2026-07-30 — combinator scope narrowed after the dogfood-example audit (`bool`, `oneOf`, `filter`, `tuple`, `vector` removed); AC3 broadened to cover `elements` (index-zero shrink), with `constant` as its degenerate edge case. Both are audit findings recorded before implementation. |
 | Amended    | maurice, 2026-07-30 — `Generator` made `@template-covariant T`, `shrink(GeneratedValue<mixed>)`, so a heterogeneous set of generators (`associative`) type-checks (D017). Re-approved on the same date. |
 | Amended    | maurice, 2026-07-30 — AC5 added for the command-alphabet generator (deferred deliverable that had no acceptance criterion): source-determined branch selection whose `GeneratedValue` context identifies the chosen branch, so shrinking delegates argument-shrinking to the producing generator. The mirror of the reason defect — there an AC promised what no channel could fill, here a deliverable existed with no AC. Records two honesties: uniform choice is not unit-tested (one draw proves nothing), and the branch choice is shrunk by no layer (a coverage gap, not a division of labour). Re-approved on the same date. |
+| Amended    | maurice, 2026-07-30 — AC4 (sequence length) and the "sequence-length generator" scope bullet removed; the length convention (`integers(1, n, origin: 1)`, never zero, shrinks to 1) moves to SPEC-005 AC9 where the sequence is drawn. It was never a SPEC-003 deliverable — `min: 1, origin: 1` is a consumer's usage of `integers`, not a property of the combinator (Step-23 criterion). Third form of the two-sided traceability check: no scope item without a deliverable. SPEC-003 → `implemented`. |
 | Supersedes | — (replaces the earlier draft "Generator port and Eris adapter") |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -70,8 +71,6 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
 - Exactly these combinators, because the two dogfood suites use exactly these:
   `constant`, `elements`, `map`, `associative`. (Audited 2026-07-30;
   `bool`, `oneOf`, `filter`, `tuple`, `vector` were removed as unused, §4.)
-- A sequence-length generator, so that shrinking a sequence's length is integer
-  shrinking (SPEC-002, second candidate family).
 - A command-alphabet generator: uniform choice across the alphabet, no bias —
   internally exactly a `oneOf` over the alphabet's generators. (`oneOf` left the
   user-facing surface in the 2026-07-30 audit; the mechanism did not.) Its
@@ -144,16 +143,13 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
     breaks the clause propagates the break upward — the third layer of the same
     decision (Step 14, Step 16).*
 
-- **AC4 — sequence length is generated and shrinkable** *(deferred to after SPEC-001, D018)*
-  - Given a maximum length *n*
-  - When a sequence is generated
-  - Then it contains **between 1 and *n*** elements — the length generator never
-    produces zero; the empty sequence is SPEC-002's own first candidate (D018) — and
-    shrinking the length produces shorter sequences independently of the elements' own
-    shrinking.
-  - *Deferred: "shorter sequences" only has meaning once sequences exist, which needs
-    the command-alphabet generator (built after SPEC-001). SPEC-003 stays `approved`,
-    not `implemented`, until AC4 and the alphabet generator land together.*
+- **AC4 — moved to SPEC-005.** The sequence length was to be `Gen::integers(1, n, origin: 1)`,
+  a *usage* of an existing combinator, not a property of one — SPEC-003 produces `integers` and
+  has no notion of "sequence". By the Step-23 criterion (assign a property to the layer that
+  produces it, not the one that consumes it) the length convention belongs to the entry point
+  that draws the sequence. It is now **SPEC-005 AC9**, with D018's reasoning. The number is left
+  as this redirect rather than renumbered, so the command-alphabet criterion keeps the AC5 it was
+  committed under.
 
 - **AC5 — the command-alphabet generator identifies the chosen branch** *(deferred to
   after SPEC-001)*
@@ -297,5 +293,5 @@ least one test; every source file maps back to this spec.
 | AC1                  | `tests/Unit/Generation/SourceTest.php` (group `SPEC-003`) | `src/Generation/Source.php` :: `Source` |
 | AC2                  | `tests/Unit/Generation/IntegersGeneratorTest.php` (group `SPEC-003`) | `src/Generation/IntegersGenerator.php`, `src/Generation/Gen.php` |
 | AC3                  | `ElementsGeneratorTest.php`, `ConstantGeneratorTest.php`, `MapGeneratorTest.php`, `AssociativeGeneratorTest.php` (group `SPEC-003`) | `ElementsGenerator.php`, `ConstantGenerator.php`, `MapGenerator.php`, `AssociativeGenerator.php`, `Gen.php` |
-| AC4                  | deferred to after SPEC-001 (with the command-alphabet generator), D018 | deferred |
+| AC4                  | moved to SPEC-005 AC9 (sequence length is a consumer's usage of `integers`, not a SPEC-003 deliverable) | n/a |
 | AC5                  | `tests/Unit/Generation/AlphabetGeneratorTest.php` (group `SPEC-003`) | `src/Generation/AlphabetGenerator.php`, `src/Generation/Gen.php` :: `Gen::alphabet` |

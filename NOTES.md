@@ -887,3 +887,26 @@ Command<M, S, mixed>>>): Generator<Command<M, S, mixed>>` fed `Gen::constant(new
 `Gen::constant(new ReadChk)` type-checks at PHPStan max; a `Gen::constant(42)` branch is rejected
 (so the check is live). Deleted, not committed. The user-facing `oneOf` removed at the audit
 returns here as the alphabet generator's internal mechanism, exactly as the scope predicted.
+
+Then AC4 (sequence length), the other deferred piece, turned out to have **no SPEC-003
+deliverable at all**. Its mechanism is `Gen::integers(1, n, origin: 1)` — a *usage* of an existing
+combinator, and a wrapper class would only delegate (§4). The choice `min: 1, origin: 1` is a
+consumer's decision, not a property of `integers`; by the Step-23 criterion it belongs to the layer
+that produces the sequence — SPEC-005, which draws the length. So AC4 and the "sequence-length
+generator" scope bullet were removed and the convention moved to SPEC-005 AC9, with D018.
+
+That completes the two-sided traceability check into a **three-sided** one, run as a checklist when
+a spec reaches `implemented`:
+- does every **AC** have a path that can fulfil it? (the `Failure::$reason` defect — an AC with no
+  channel);
+- does every **deliverable** have an AC? (the alphabet generator — a deliverable with no AC);
+- does every **scope item** have a deliverable? (the sequence-length generator — a scope promise
+  whose "deliverable" was just a call to `integers`).
+Each of the three struck once here; together they are the finalisation checklist. Not yet a hard
+rule (R11) — one instance each — but the checklist is the candidate.
+
+SPEC-003 → `implemented`. Three-sided check run: AC1–AC3 and AC5 each map to a test and source
+(traceability filled); AC4 is a redirect to SPEC-005, not a hole; the only scope item that lacked a
+deliverable (sequence-length generator) was removed, not left dangling. The AC number 5 is kept
+(not renumbered to 4) so it stays consistent with commit c30f7e2 and this Step's narrative; the AC4
+slot is a documented redirect rather than a renumber.

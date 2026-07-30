@@ -91,11 +91,12 @@ order, since each step is used by the next:
 `bool`, `oneOf`, `filter`, `tuple`, `vector` were removed from scope by the
 2026-07-30 combinator audit — neither dogfood suite uses them (§4).
 
-Deferred to step 3, after SPEC-001: the command-alphabet generator (it produces
-`Command` instances) **and the sequence-length generator, AC4** — "shorter sequences"
-only has meaning once sequences exist, which the alphabet builds (D018). So SPEC-003
-finishes step 2 as `approved` with AC1–AC3 implemented and AC4 pending; it becomes
-`implemented` when these two land after SPEC-001.
+Deferred to step 3, after SPEC-001: the command-alphabet generator (AC5) — it produces
+`Command` instances, which do not exist until SPEC-001. So SPEC-003 finishes step 2 as
+`approved` with AC1–AC3 implemented and AC5 pending; it becomes `implemented` when the
+alphabet generator lands after SPEC-001. (The sequence length, once AC4 here, proved to be a
+consumer's usage of `integers(1, n, origin: 1)` rather than a generation deliverable — it moved
+to SPEC-005 AC9, where the sequence is drawn. D018.)
 
 ## 3. SPEC-001 — command contract and runner
 
@@ -110,7 +111,8 @@ suggests:
   must not compare messages.
 
 Finish by returning to SPEC-003 for the one piece deferred from step 2: the
-command-alphabet generator, which needs the `Command` type defined here.
+command-alphabet generator (AC5), which needs the `Command` type defined here. That lands
+SPEC-003 at `implemented`.
 
 ## 4. SPEC-002 — sequence shrinking
 

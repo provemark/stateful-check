@@ -48,6 +48,14 @@ All notable changes to this project are documented here. Format follows
 
 ### Changed
 
+- SPEC-003 (generation core) is `implemented`. The last deferred piece, the command-alphabet
+  generator (`Gen::alphabet`, AC5), landed: uniform choice over a heterogeneous list of command
+  generators, recording the chosen branch so shrinking delegates argument-shrinking to the
+  generator that produced the command; the branch choice is shrunk by no layer (a documented
+  coverage gap). Its first-of-a-kind composite context has an out-of-range failure mode, handled
+  with a loud `LogicException`. SPEC-003's other deferred piece, AC4 (sequence length), was
+  removed: it had no SPEC-003 deliverable — the length is `integers(1, n, origin: 1)`, a
+  consumer's usage — and moved to SPEC-005 AC9 (D018), where the sequence is drawn.
 - SPEC-001 (command contract and runner) is `implemented`: all eight acceptance
   criteria traced to tests over `SequenceRunner`, `Command`, `Outcome`, `Failure`,
   `FailureKind`, `RunResult` and `Ref`. Includes AC5/AC6 (the runner catches

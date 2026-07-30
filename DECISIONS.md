@@ -323,8 +323,10 @@ friction.
 
 ## D018 — A generated sequence length is at least one; the empty sequence is SPEC-002's
 
-Spec: SPEC-003, AC4 (sequence-length generator)
-Status: **decided — implementation deferred to after SPEC-001**
+Spec: SPEC-005, AC9 (was SPEC-003 AC4 — moved when it proved to have no SPEC-003 deliverable: the
+length is `integers(1, n, origin: 1)`, a consumer's usage of a combinator, drawn where the entry
+point builds the sequence, not a property of the generation core)
+Status: **decided — implementation pending with SPEC-005**
 Decided: maurice, 2026-07-30
 Decision: The sequence-length generator generates a length in `[1, n]` and shrinks
 toward 1 — never toward 0. The lower bound of 1 is a **generation** bound, not only a
