@@ -452,5 +452,35 @@ returns only in its own amendment when a real suite needs it.
 Net: the core to build is four combinators plus `integers()`, not nine. Writing the
 examples before the generators paid for itself here.
 
-## Step 12 —
+## Step 12 — the generation contract; the one step where red-first does not apply (2026-07-30)
+
+Defined `Generator` and `GeneratedValue` before any combinator, because the context
+shape they fix determines how every combinator shrinks. Design A: a generator holds
+its own config and reads only the opaque context of the value handed back to
+`shrink()`; a primitive integer therefore carries a `null` context, while a composite
+stores its sub-value(s) — `elements` the index, `map` the inner value, `associative`
+the per-key values.
+
+**Context stays `mixed`, on purpose.** Opaque to everyone but the producing generator,
+exactly as fast-check keeps `Value.context` as `unknown`. Flagged in the code not to
+template it to `@template TContext` now that D001 put the rest of the contract on
+templates — that would leak the opacity the design needs. Someone will want to
+"improve" it; the comment is there to stop them.
+
+**The alphabet consequence, recorded now so it is no surprise three steps on.** The
+command-alphabet generator is internally a `oneOf` over the alphabet's generators —
+`oneOf` left the user-facing surface in the audit, not the mechanism. Its context must
+carry the chosen branch plus that branch's context, so SPEC-002's per-command argument
+shrinking can tell which alphabet entry made a command and delegate to the right
+generator. Written into SPEC-003 at the command-alphabet-generator scope item.
+
+**This is the one step where red-first does not apply, and that is deliberate — not a
+precedent.** An interface has no behaviour to fail-test, and a test on a readonly
+constructor would assert PHP's own promotion, i.e. nothing (the "test that tests
+nothing" §2 warns against). So the gate for this step is **PHPStan max, not Pest**: the
+templates and signatures either type-check or they do not. The first behaviour test
+arrives with `integers()` (AC2). Do not read this as "interfaces need no test" — it is
+specific to a contract that has no behaviour.
+
+## Step 13 —
 

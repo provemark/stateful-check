@@ -64,7 +64,12 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
   `bool`, `oneOf`, `filter`, `tuple`, `vector` were removed as unused, §4.)
 - A sequence-length generator, so that shrinking a sequence's length is integer
   shrinking (SPEC-002, second candidate family).
-- A command-alphabet generator: uniform choice across the alphabet, no bias.
+- A command-alphabet generator: uniform choice across the alphabet, no bias —
+  internally exactly a `oneOf` over the alphabet's generators. (`oneOf` left the
+  user-facing surface in the 2026-07-30 audit; the mechanism did not.) Its
+  `GeneratedValue` context therefore carries the **chosen branch** plus that
+  branch's own context, so SPEC-002 can tell which alphabet entry produced a
+  command and delegate per-command argument shrinking to the right generator.
   **Built after SPEC-001**, since it produces `Command` instances and that type
   does not exist until then. See `ROADMAP.md`.
 
@@ -147,13 +152,21 @@ final class Source
 
 /**
  * A generated value plus whatever its generator needs to shrink it later.
- * Opaque to everything except the generator that produced it.
  *
  * @template T
  */
 final readonly class GeneratedValue
 {
-    /** @param T $value */
+    /**
+     * $context is deliberately `mixed` and stays that way — opaque to everyone but
+     * the generator that produced it, exactly as fast-check keeps `Value.context`
+     * as `unknown`. Do NOT template it (`@template TContext`): the opacity is the
+     * design, and only the producing generator knows its shape and reads it in
+     * shrink(). Null for a primitive whose value is self-describing (an integer);
+     * a composite (elements, map, associative) stores the sub-value(s) it reduces.
+     *
+     * @param T $value
+     */
     public function __construct(public mixed $value, public mixed $context = null) {}
 }
 
