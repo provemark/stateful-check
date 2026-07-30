@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Provemark\StatefulCheck\Generation;
 
+use Provemark\StatefulCheck\Command;
+
 /**
  * Static facade over the generation combinators (SPEC-003).
  *
@@ -75,5 +77,22 @@ final class Gen
     public static function associative(array $generators): Generator
     {
         return new AssociativeGenerator($generators);
+    }
+
+    /**
+     * Uniform choice over a command alphabet (SPEC-003 AC5). The generated value's context records
+     * which branch was chosen, so shrinking delegates the command's argument-shrinking to the
+     * generator that produced it. The branch choice itself is not shrunk (a documented coverage
+     * gap). Result types may differ across branches — Command's TResult is covariant (D019).
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<Generator<Command<TModel, TSut, mixed>>>  $branches
+     * @return Generator<Command<TModel, TSut, mixed>>
+     */
+    public static function alphabet(array $branches): Generator
+    {
+        return new AlphabetGenerator($branches);
     }
 }

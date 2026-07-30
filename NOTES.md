@@ -855,3 +855,35 @@ otherwise would be the kind of false guarantee this package exists to avoid.
 
 SPEC-001 status → `implemented`. All eight ACs traced (AC → test → source). `composer check` green
 across the whole suite. Next in ROADMAP: the dogfood examples port (§5), then SPEC-002.
+
+## Step 28 — SPEC-003 AC5: the alphabet generator, and a two-sided traceability check (2026-07-30)
+
+Returning to SPEC-003 for the two pieces deferred until SPEC-001 existed: the command-alphabet
+generator and the sequence-length generator (AC4). Doing the alphabet generator first (it is why
+the deferral existed — it produces `Command` instances) surfaced a gap: it was in scope but no AC
+covered it. AC3 names only `elements`/`map`/`associative`. Added AC5.
+
+That is the **mirror of the reason defect** (Step 26): there an AC promised a field no channel
+could fill; here a deliverable existed with no AC. The two together are a **two-sided check to run
+at every spec's move to `implemented`**: does every AC have a path that can fulfil it, and does
+every scoped deliverable have an AC that pins it? More useful than two isolated observations —
+kept as a candidate for the `implemented` checklist.
+
+Two honesties written into AC5 so nothing reads as a guarantee it is not:
+- **"Uniform choice" is not unit-tested.** One draw proves nothing about a distribution, and a
+  statistical test in a unit suite is fragile. What the test asserts is source-determined,
+  branch-recording, correctly-delegating selection — not uniformity. Uniformity is the design
+  intent (fast-check ignores command bias too), stated, not asserted.
+- **The branch choice is shrunk by no layer** — not the alphabet generator (it delegates only
+  argument-shrinking to the chosen branch) and not SPEC-002 (which shrinks length and arguments
+  but never replaces command A with command B). This is a **coverage gap, not a division of
+  labour**: it would have been wrong to write it as "SPEC-002 handles it", because SPEC-002 does
+  not. Consequence recorded: a shrunk counterexample may keep a more complex command where a
+  simpler alphabet entry would also have failed. Acceptable for v0.1 — shortening by removal is
+  almost always more useful than replacement.
+
+R10 gate for AC5 run before building, and it passed: a throwaway `chkAlphabet(list<Generator<
+Command<M, S, mixed>>>): Generator<Command<M, S, mixed>>` fed `Gen::constant(new SignChk)` beside
+`Gen::constant(new ReadChk)` type-checks at PHPStan max; a `Gen::constant(42)` branch is rejected
+(so the check is live). Deleted, not committed. The user-facing `oneOf` removed at the audit
+returns here as the alphabet generator's internal mechanism, exactly as the scope predicted.

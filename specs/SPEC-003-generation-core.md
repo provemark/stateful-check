@@ -7,6 +7,7 @@
 | Approved   | maurice, 2026-07-30                               |
 | Amended    | maurice, 2026-07-30 — combinator scope narrowed after the dogfood-example audit (`bool`, `oneOf`, `filter`, `tuple`, `vector` removed); AC3 broadened to cover `elements` (index-zero shrink), with `constant` as its degenerate edge case. Both are audit findings recorded before implementation. |
 | Amended    | maurice, 2026-07-30 — `Generator` made `@template-covariant T`, `shrink(GeneratedValue<mixed>)`, so a heterogeneous set of generators (`associative`) type-checks (D017). Re-approved on the same date. |
+| Amended    | maurice, 2026-07-30 — AC5 added for the command-alphabet generator (deferred deliverable that had no acceptance criterion): source-determined branch selection whose `GeneratedValue` context identifies the chosen branch, so shrinking delegates argument-shrinking to the producing generator. The mirror of the reason defect — there an AC promised what no channel could fill, here a deliverable existed with no AC. Records two honesties: uniform choice is not unit-tested (one draw proves nothing), and the branch choice is shrunk by no layer (a coverage gap, not a division of labour). Re-approved on the same date. |
 | Supersedes | — (replaces the earlier draft "Generator port and Eris adapter") |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -154,6 +155,27 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
     the command-alphabet generator (built after SPEC-001). SPEC-003 stays `approved`,
     not `implemented`, until AC4 and the alphabet generator land together.*
 
+- **AC5 — the command-alphabet generator identifies the chosen branch** *(deferred to
+  after SPEC-001)*
+  - Given an alphabet — a list of command generators
+  - When it generates a command
+  - Then it selects a branch determined by the source (the same seed selects the same
+    branch), records in the `GeneratedValue`'s context **which branch was chosen** plus
+    that branch's own context, and delegates generation to it; shrinking then delegates
+    the command's **argument**-shrinking to the generator that produced it — proven by the
+    candidates being the same concrete command class, shrunk toward that generator's origin.
+  - *Uniform, unbiased choice is the intent (as in fast-check, which ignores command bias
+    too). It is **not** separately unit-tested: one draw proves nothing about a
+    distribution, and a statistical test in a unit suite is fragile. What is tested is
+    source-determined, branch-recording, correctly-delegating selection.*
+  - *The branch choice is never shrunk — not by this generator, and not by SPEC-002, which
+    shrinks length and arguments but never replaces one command with another. This is a
+    **coverage gap, not a division of labour**: no layer simplifies "which command". The
+    consequence, stated so no one assumes a mechanism that does not exist: a shrunk
+    counterexample may keep a more complex command where a simpler alphabet entry would
+    also have failed. Shortening by removal is almost always more useful than replacement,
+    which is why the gap is acceptable for v0.1.*
+
 ## API sketch
 
 Illustrative only.
@@ -276,3 +298,4 @@ least one test; every source file maps back to this spec.
 | AC2                  | `tests/Unit/Generation/IntegersGeneratorTest.php` (group `SPEC-003`) | `src/Generation/IntegersGenerator.php`, `src/Generation/Gen.php` |
 | AC3                  | `ElementsGeneratorTest.php`, `ConstantGeneratorTest.php`, `MapGeneratorTest.php`, `AssociativeGeneratorTest.php` (group `SPEC-003`) | `ElementsGenerator.php`, `ConstantGenerator.php`, `MapGenerator.php`, `AssociativeGenerator.php`, `Gen.php` |
 | AC4                  | deferred to after SPEC-001 (with the command-alphabet generator), D018 | deferred |
+| AC5                  | `tests/Unit/Generation/AlphabetGeneratorTest.php` (group `SPEC-003`) | `src/Generation/AlphabetGenerator.php`, `src/Generation/Gen.php` :: `Gen::alphabet` |
