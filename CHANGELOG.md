@@ -99,3 +99,10 @@ All notable changes to this project are documented here. Format follows
   user-facing `map`/`associative`; the mechanism includes `elements`. Recorded that
   the ordering of `elements` is semantic: it shrinks toward the first element, so the
   simplest value belongs first.
+- SPEC-003 AC3 implemented — `constant`, `elements`, `map`, `associative` — built on
+  the covariant `Generator` amendment (D017). SPEC-003 AC1–AC3 are done; it stays
+  `approved`, not `implemented`, because AC4 (sequence length) and the command-alphabet
+  generator are deferred to after SPEC-001 (D018): "shorter sequences" needs sequences,
+  which the alphabet builds. AC4 sharpened from "at most n" to "between 1 and n" — the
+  length generates in `[1, n]` and never produces the empty sequence, which is SPEC-002's
+  own candidate.

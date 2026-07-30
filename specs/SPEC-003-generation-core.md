@@ -143,11 +143,16 @@ Governing rules: R4 (determinism), R7 (no runtime dependencies), and CLAUDE.md �
     breaks the clause propagates the break upward — the third layer of the same
     decision (Step 14, Step 16).*
 
-- **AC4 — sequence length is generated and shrinkable**
+- **AC4 — sequence length is generated and shrinkable** *(deferred to after SPEC-001, D018)*
   - Given a maximum length *n*
   - When a sequence is generated
-  - Then it contains at most *n* elements, and shrinking the length produces
-    shorter sequences independently of the elements' own shrinking.
+  - Then it contains **between 1 and *n*** elements — the length generator never
+    produces zero; the empty sequence is SPEC-002's own first candidate (D018) — and
+    shrinking the length produces shorter sequences independently of the elements' own
+    shrinking.
+  - *Deferred: "shorter sequences" only has meaning once sequences exist, which needs
+    the command-alphabet generator (built after SPEC-001). SPEC-003 stays `approved`,
+    not `implemented`, until AC4 and the alphabet generator land together.*
 
 ## API sketch
 
@@ -270,4 +275,4 @@ least one test; every source file maps back to this spec.
 | AC1                  | `tests/Unit/Generation/SourceTest.php` (group `SPEC-003`) | `src/Generation/Source.php` :: `Source` |
 | AC2                  | `tests/Unit/Generation/IntegersGeneratorTest.php` (group `SPEC-003`) | `src/Generation/IntegersGenerator.php`, `src/Generation/Gen.php` |
 | AC3                  | `ElementsGeneratorTest.php`, `ConstantGeneratorTest.php`, `MapGeneratorTest.php`, `AssociativeGeneratorTest.php` (group `SPEC-003`) | `ElementsGenerator.php`, `ConstantGenerator.php`, `MapGenerator.php`, `AssociativeGenerator.php`, `Gen.php` |
-| AC4                  | —                           | —                    |
+| AC4                  | deferred to after SPEC-001 (with the command-alphabet generator), D018 | deferred |

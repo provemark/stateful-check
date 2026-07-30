@@ -320,3 +320,29 @@ Revisit if: the runtime narrowing proves error-prone in practice. The widened
 for a runtime check, contract-wide; if that trade turns out to hide real bugs, revisit
 whether a narrower, invariant shrink with an explicit variance escape is worth the
 friction.
+
+## D018 — A generated sequence length is at least one; the empty sequence is SPEC-002's
+
+Spec: SPEC-003, AC4 (sequence-length generator)
+Status: **decided — implementation deferred to after SPEC-001**
+Decided: maurice, 2026-07-30
+Decision: The sequence-length generator generates a length in `[1, n]` and shrinks
+toward 1 — never toward 0. The lower bound of 1 is a **generation** bound, not only a
+shrink origin: a length of zero is never produced. That completes the division of labour
+with SPEC-002: the empty sequence is SPEC-002's own first shrink candidate ("did the
+commands cause the failure at all?"), a semantically distinct step, and this layer never
+touches it. AC4's wording is sharpened accordingly, from "at most *n*" to "between 1 and
+*n*".
+Because: a length origin of 0 would be redundant with SPEC-002's empty-first candidate —
+two paths to empty — and would generate degenerate empty properties. Keeping the empty
+case wholly in SPEC-002, and the length in `[1, n]` here, keeps each layer doing one
+thing. The reasoning is tied to SPEC-002's empty-sequence candidate, which is sharp now
+and hard to reconstruct three steps on — hence recording the decision before building.
+Note — a boundary that will surface at build: "at least one" is about the *generated*
+length, not the number of commands in a *counterexample*. A command whose precondition
+fails is skipped and drops out of the shrink representation (R1), so a shrunk
+counterexample can legitimately contain **zero** executed commands even though the
+generated length was ≥ 1. Consistent, but not what a reader of "at least one" expects —
+recorded here and in NOTES so it is not later mistaken for a contradiction.
+Revisit if: a use appears for generating the empty sequence directly (none is known;
+SPEC-002 already owns the empty case).

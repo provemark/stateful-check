@@ -631,5 +631,30 @@ contract's variance is exercised only when something composes several instances 
 different type arguments; until then a wrong variance annotation is silent. Look there
 first when a contract "seems fine".
 
-## Step 19 —
+## Step 19 — AC4 deferred; length origin decided ahead of its build (2026-07-30)
+
+AC4 (the sequence-length generator) has no honest content yet. Both its clauses speak of
+*sequences*, and sequences are built by the command-alphabet generator, which is deferred
+to after SPEC-001 (it needs `Command`). The length generator on its own is just
+`integers()` producing a length — testing it now would re-test AC2, not AC4. So AC4
+shifts to land with the alphabet generator; SPEC-003 stays `approved` with AC1–AC3
+implemented and AC4 pending. A spec waiting on a dependency is more honest than a test
+that proves nothing. (It was tempting to reason the other way — declare a thin
+length-generator "done" — and worth noting that the temptation existed.)
+
+**The length origin is decided now (D018), before its build, because the reasoning is
+tied to SPEC-002's empty-sequence candidate and that is sharp today.** Length generates
+in `[1, n]` and shrinks toward 1 — the lower bound is a *generation* bound too, so a
+length of zero is never produced. That gives a clean division of labour: SPEC-002 owns
+the empty sequence as its own first candidate; the length layer never touches it. Origin
+0 would be two paths to empty. AC4's wording is sharpened from "at most *n*" to "between
+1 and *n*".
+
+**A boundary to remember, so it is not mistaken for a bug later:** "at least one" is
+about the *generated* length, not the command count in a *counterexample*. A command
+whose precondition fails is skipped and drops from the shrink representation (R1), so a
+shrunk counterexample can contain zero executed commands even though the generated length
+was ≥ 1. Consistent; just not what "at least one" leads a reader to expect.
+
+## Step 20 —
 

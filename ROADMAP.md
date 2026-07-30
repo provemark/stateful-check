@@ -86,14 +86,16 @@ order, since each step is used by the next:
    composing anything on top.
 3. `constant` (degenerate: one value, no shrinking) and `elements`, which shrinks its
    index toward zero via `integers()` — so `elements` is the first case of AC3.
-4. `map`, `associative` — the rest of AC3 (delegation).
-5. Sequence-length generator (AC4).
+4. `map`, `associative` — the rest of AC3 (delegation). **AC1–AC3 done here.**
 
 `bool`, `oneOf`, `filter`, `tuple`, `vector` were removed from scope by the
 2026-07-30 combinator audit — neither dogfood suite uses them (§4).
 
-Deferred to step 3, after SPEC-001: the command-alphabet generator. It produces
-`Command` instances, so it cannot be built before that type exists.
+Deferred to step 3, after SPEC-001: the command-alphabet generator (it produces
+`Command` instances) **and the sequence-length generator, AC4** — "shorter sequences"
+only has meaning once sequences exist, which the alphabet builds (D018). So SPEC-003
+finishes step 2 as `approved` with AC1–AC3 implemented and AC4 pending; it becomes
+`implemented` when these two land after SPEC-001.
 
 ## 3. SPEC-001 — command contract and runner
 
