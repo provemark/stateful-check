@@ -777,3 +777,29 @@ Two things worth stating so they are not misread later:
    its argument as `Throwable` — so this is a consistency confirmation, not a standalone decision
    (no D-number).
 
+
+## Step 25 — AC7 Ref and handle threading; a third kind of green-on-arrival (2026-07-30)
+
+AC7 introduced `src/Ref.php` (a mutable handle, required by dogfood example 1) and pinned two
+runner properties. The runner needed **no change**: `freshSut()` was already called once outside
+the loop and `$sut` never reassigned.
+
+Green-on-arrival, but a different kind than AC4's. AC4 recorded *incidental* behaviour — the
+padding happened to be correct, nobody chose it. AC7 records **intended-but-unspecified**
+behaviour: threading one handle and never replacing it was a deliberate choice at AC1, only never
+written down. That is a third category, and the distinction is worth keeping because it says how
+firm the ground is: intended-but-unspecified is a stronger guarantee than incidental — the
+behaviour was designed, the amendment just states it. So the three kinds of green-on-arrival seen
+so far: genuinely redundant (skip the AC), incidental-but-correct (AC4), intended-but-unspecified
+(AC7). Only the first is not worth an AC.
+
+R10 gate is N/A for `Ref`, recorded rather than skipped silently: `Ref<T>` is invariant, but —
+unlike a `Command` alphabet or a `Generator` set — it is never composed heterogeneously (the
+runner takes one `TSut`, not a `list<Ref<…>>`). The composition R10 guards against has no subject
+here, so the heterogeneous type-check has nothing to check.
+
+Non-vacuity of the two runner properties shown by two isolated mutants, both using a same-object
+factory so the properties do not move together: `$freshSut()` inside the loop fails only the
+"exactly once" test (identity holds, same object returned); `clone $sut` before `run()` fails only
+the "never replaced" test (the count stays one). One same-object factory kind, two tests — the
+AC3 isolation discipline, adapted so each mutant measures exactly one property.

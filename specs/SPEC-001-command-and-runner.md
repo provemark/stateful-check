@@ -8,6 +8,7 @@
 | Amended    | maurice, 2026-07-30 — `Command`'s `TResult` made `@template-covariant`, and `Outcome` made non-generic, so an alphabet may mix commands of different result types as `list<Command<M, S, mixed>>` (dogfood example 2: `sign` → null, `read` → report). `postCondition` now receives a non-generic `Outcome` and narrows the value if it needs the type. Same defect class as D017; recorded as D019. Re-approved on the same date. |
 | Amended    | maurice, 2026-07-30 — `SequenceRunner::run` sketch brought in line with D001: `@template TModel`, `@template TSut`, `list<Command<TModel, TSut, mixed>>`, `callable(): TSut`. The bare `list<Command>` predated D001 and was never revisited; a concrete system type (dogfood example 2's `Ref`) would not type-check against it. No new decision — consistency fix. |
 | Amended    | maurice, 2026-07-30 — AC4's "Then" sharpened from "in a form SPEC-002 can filter on and replay against" to two named properties: `executed` is total and index-aligned (`count(executed) === count($commands)`, padding included — the filter form, SPEC-002 AC3), and it is replayable given a deterministic system (the baseline SPEC-002 AC8 measures divergence against). AC4 **records existing but previously unspecified behaviour**, not new behaviour: the padding that makes totality hold was built at AC2 without a test and without being stated anywhere as intended — incidental behaviour that happened to be correct. AC4 makes it a guarantee. No new decision. |
+| Amended    | maurice, 2026-07-30 — AC7's "Then" sharpened to name the runner's part explicitly: `freshSut()` is called exactly once, and the same handle instance (identity, not equal content) is threaded and passed throughout. Introduces `Ref` (a mutable handle, required by dogfood example 1). The runner needs no change — the handle behaviour AC7 pins is **intended-but-unspecified**: calling `freshSut()` outside the loop and never reassigning `$sut` was a deliberate choice at AC1, only never written down. (A firmer footing than AC4's incidental padding.) No new decision. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -191,8 +192,9 @@ value.
 - **AC7 — the system handle is threaded, never replaced**
   - Given a sequence operating on an immutable system through a `Ref`
   - When the sequence executes
-  - Then each command observes the state left by the previous executed command,
-    and the runner holds the same handle instance throughout.
+  - Then the runner calls `freshSut()` exactly once, each command observes the state
+    left by the previous executed command, and the runner holds and passes the same
+    handle instance throughout — identity, not merely equal content.
 
 - **AC8 — the postcondition can observe the system**
   - Given a command whose postcondition asserts on system state rather than on
@@ -410,5 +412,5 @@ least one test; every source file maps back to this spec.
 | AC4                  | tests/Unit/SequenceRunnerTest.php :: "records a total, index-aligned, replayable execution path" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC5                  | tests/Unit/SequenceRunnerTest.php :: "catches an expected exception…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC6                  | tests/Unit/SequenceRunnerTest.php :: "classifies the failure kind by whether run() threw…" + "an unexpected exception is a failure that stops the run…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run; src/Failure.php (D020) |
-| AC7                  | —                           | —                    |
+| AC7                  | tests/Unit/SequenceRunnerTest.php :: "calls the system factory exactly once per run" + "threads one handle to every command and never replaces it" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run; src/Ref.php |
 | AC8                  | —                           | —                    |

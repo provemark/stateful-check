@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Provemark\StatefulCheck\Command;
 use Provemark\StatefulCheck\FailureKind;
 use Provemark\StatefulCheck\Outcome;
+use Provemark\StatefulCheck\Ref;
 use Provemark\StatefulCheck\SequenceRunner;
 
 /**
@@ -93,6 +94,61 @@ final class SpyCommand implements Command
  * concrete thrown class rather than generalising up to a parent (AC6, D020).
  */
 final class BoomException extends RuntimeException {}
+
+/** Records the system handle each command was given, so a test can compare their identity (AC7). */
+final class HandleLog
+{
+    /** @var list<object> */
+    public array $seen = [];
+
+    public function record(object $handle): void
+    {
+        $this->seen[] = $handle;
+    }
+}
+
+/**
+ * A command over an immutable string system held in a Ref: it appends its tag by swapping the
+ * Ref's value, and records the handle it saw. Threading works only if every command is given
+ * the same handle carrying the previous command's state (AC7).
+ *
+ * @implements Command<null, Ref<string>, null>
+ */
+final class AppendCommand implements Command
+{
+    public function __construct(
+        private string $tag,
+        private HandleLog $handles,
+    ) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        $this->handles->record($sut);
+        $sut->value = $sut->value.$this->tag;
+
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return true;
+    }
+
+    public function __toString(): string
+    {
+        return "append({$this->tag})";
+    }
+}
 
 it('runs a passing sequence to completion, each postcondition seeing the post-transition model', function () {
     $log = new CallLog;
@@ -350,4 +406,59 @@ it('an unexpected exception is a failure that stops the run, carrying the except
         ->and($failure->exceptionClass)->toBe(BoomException::class)
         ->and($result->modelBefore)->toBe(1)  // nextState runs on the throw path
         ->and($result->modelAfter)->toBe(2);
+})->group('SPEC-001');
+
+it('calls the system factory exactly once per run', function () {
+    // A counting factory that always returns the same handle. Returning one object (rather than
+    // a fresh one each call) is deliberate: it lets the call count move under a per-command
+    // mutation without the handle identity moving too, isolating "exactly once" from "never
+    // replaced". freshSut's fresh-per-candidate contract is SPEC-002's concern, not this one.
+    $ref = new Ref('');
+    $calls = 0;
+    $freshSut = function () use ($ref, &$calls): Ref {
+        $calls++;
+
+        return $ref;
+    };
+    $handles = new HandleLog;
+    $commands = [
+        new AppendCommand('a', $handles),
+        new AppendCommand('b', $handles),
+        new AppendCommand('c', $handles),
+    ];
+
+    $result = (new SequenceRunner)->run($commands, $freshSut, null);
+
+    // A second call would hand the sequence a fresh system and erase its history. Nothing but
+    // the runner guards this, so it is the runner's property to test.
+    expect($result->passed)->toBeTrue()
+        ->and($calls)->toBe(1);
+})->group('SPEC-001');
+
+it('threads one handle to every command and never replaces it', function () {
+    // Same-object factory again, so a per-command call would not move identity — this test
+    // then isolates "never replaced", which a clone-before-run mutation breaks.
+    $ref = new Ref('');
+    $freshSut = fn (): Ref => $ref;
+    $handles = new HandleLog;
+    $commands = [
+        new AppendCommand('a', $handles),
+        new AppendCommand('b', $handles),
+        new AppendCommand('c', $handles),
+    ];
+
+    $result = (new SequenceRunner)->run($commands, $freshSut, null);
+
+    expect($result->passed)->toBeTrue();
+
+    // Identity, not content: every command received the very handle freshSut returned, not a
+    // copy. That is what "never replaced" means.
+    expect($handles->seen)->toHaveCount(3);
+    [$h0, $h1, $h2] = $handles->seen;
+    expect($h0)->toBe($ref)
+        ->and($h1)->toBe($ref)
+        ->and($h2)->toBe($ref)
+        ->and($ref->value)->toBe('abc');
+
+    // Each command saw the state the previous left: a, then ab, then abc.
 })->group('SPEC-001');
