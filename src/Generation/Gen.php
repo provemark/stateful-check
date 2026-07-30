@@ -22,4 +22,30 @@ final class Gen
     {
         return new IntegersGenerator($min, $max, $origin);
     }
+
+    /**
+     * A generator of one fixed value, with no shrinking.
+     *
+     * @template T
+     *
+     * @param  T  $value
+     * @return Generator<T>
+     */
+    public static function constant(mixed $value): Generator
+    {
+        return new ConstantGenerator($value);
+    }
+
+    /**
+     * A generator over a fixed set of values that shrinks toward the first element.
+     *
+     * @template T
+     *
+     * @param  array<array-key, T>  $choices
+     * @return Generator<T>
+     */
+    public static function elements(array $choices): Generator
+    {
+        return new ElementsGenerator($choices);
+    }
 }

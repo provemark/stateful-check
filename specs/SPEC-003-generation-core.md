@@ -38,7 +38,10 @@ integer shrinking composes into almost everything else. `elements` shrinks its i
 toward zero, so it shrinks toward the **first element** — that order is therefore
 semantic: put the simplest or most ordinary value first, because counterexamples
 reduce toward it, and a surprising first element yields counterexamples that read as
-noise. (Repeated in the `elements` docblock when it is built.) `map` passes shrinking
+noise. (Repeated in the `elements` docblock when it is built.) `elements` also
+normalizes its argument with `array_values` — keys are dropped, only order carries
+meaning — deduplicates by value so a shrink candidate is never the input value (not
+merely a different index), and throws on an empty array. `map` passes shrinking
 through to its part; `associative` shrinks a keyed bundle of generators.
 
 The combinator set was audited against the two dogfood examples once they existed
@@ -240,5 +243,5 @@ least one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | `tests/Unit/Generation/SourceTest.php` (group `SPEC-003`) | `src/Generation/Source.php` :: `Source` |
 | AC2                  | `tests/Unit/Generation/IntegersGeneratorTest.php` (group `SPEC-003`) | `src/Generation/IntegersGenerator.php`, `src/Generation/Gen.php` |
-| AC3                  | —                           | —                    |
+| AC3                  | `tests/Unit/Generation/ElementsGeneratorTest.php`, `ConstantGeneratorTest.php` (group `SPEC-003`) — `map`/`associative` pending (step 4) | `src/Generation/ElementsGenerator.php`, `ConstantGenerator.php`, `Gen.php` — `map`/`associative` pending |
 | AC4                  | —                           | —                    |

@@ -502,5 +502,19 @@ condition under which it starts to matter: a real suite draws a command argument
 `integers()` over a wide range and relies on hitting an edge to trigger a bug — then
 edge-biasing (or a small default range) earns its own spec.
 
-## Step 14 —
+## Step 14 — planning constant/elements; the duplicate-choices trade-off (2026-07-30)
+
+Porting the interface clause "a candidate is never the input" onto `elements` exposed
+a real choice. `elements(['x', 'x', 'y'])` would shrink index 1 (`'x'`) to index 0
+(`'x'`) — a different index but the SAME value, so the clause breaks at the value
+level though it still holds at the index level. It terminates, but wastes budget and
+the docblock promise reads as false. Two options: deduplicate the choices at
+construction, or weaken the clause to "never the same index". Chose dedup, so the
+clause stays true as written and the promise a reader sees is the promise they get.
+
+Two smaller `elements` behaviours settled with it, no decision-log entry because
+neither has a real alternative: it normalizes non-list arrays with `array_values`
+(keys dropped, order the only meaning), and it throws on an empty array.
+
+## Step 15 —
 

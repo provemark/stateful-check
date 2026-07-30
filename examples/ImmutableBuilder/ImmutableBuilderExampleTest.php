@@ -35,6 +35,9 @@ use Provemark\StatefulCheck\StatefulProperty;
 it('matches the shadow model after every step of any with* sequence', function () {
     // Whole values drawn with elements — the blanks (which build() must reject) sit
     // in the same set, so no oneOf is needed (SPEC-003 combinator audit; see NOTES).
+    // Valid names first, blanks last is deliberate: elements shrinks toward the first
+    // element, so a counterexample reduces toward a valid name and keeps a blank only
+    // if the bug needs it. Moot here — this property passes, so the shrinker never runs.
     $name = Gen::elements(['ACME GenAI', 'agent-2', 'Content Credentials', '', '   ', "\t"]);
 
     $version = Gen::elements([null, '1.0', '2.3.1']);
