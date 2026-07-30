@@ -212,3 +212,27 @@ it('skips a command whose precondition is false and continues the sequence', fun
     expect($modelOf('a', 'post'))->toBe(1)
         ->and($modelOf('c', 'pre'))->toBe(1);
 })->group('SPEC-001');
+
+it('records a total, index-aligned, replayable execution path', function () {
+    // Four commands, the run stops in the middle (b fails). c and d are never reached.
+    $commands = [
+        new SpyCommand('a', new CallLog),
+        new SpyCommand('b', new CallLog, postconditionHolds: false),
+        new SpyCommand('c', new CallLog),
+        new SpyCommand('d', new CallLog),
+    ];
+
+    $result = (new SequenceRunner)->run($commands, fn () => new stdClass, 0);
+
+    // Total and index-aligned: one bool per position, positions after the stop padded false.
+    // The length relation is the pin — this is what SPEC-002 AC3 filters on. Without the
+    // padding, executed would be [true, true] and lose its correspondence with $commands.
+    expect($result->executed)->toHaveCount(count($commands))
+        ->and($result->executed)->toBe([true, true, false, false]);
+
+    // Replayable: the same sequence against a fresh (deterministic) system reproduces the
+    // same executed. The runner adds no variation of its own — this is the baseline SPEC-002
+    // AC8 measures a divergence against. It is conditional on determinism, which the spies are.
+    $replay = (new SequenceRunner)->run($commands, fn () => new stdClass, 0);
+    expect($replay->executed)->toBe($result->executed);
+})->group('SPEC-001');

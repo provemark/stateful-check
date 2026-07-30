@@ -7,6 +7,7 @@
 | Approved   | maurice, 2026-07-30                               |
 | Amended    | maurice, 2026-07-30 — `Command`'s `TResult` made `@template-covariant`, and `Outcome` made non-generic, so an alphabet may mix commands of different result types as `list<Command<M, S, mixed>>` (dogfood example 2: `sign` → null, `read` → report). `postCondition` now receives a non-generic `Outcome` and narrows the value if it needs the type. Same defect class as D017; recorded as D019. Re-approved on the same date. |
 | Amended    | maurice, 2026-07-30 — `SequenceRunner::run` sketch brought in line with D001: `@template TModel`, `@template TSut`, `list<Command<TModel, TSut, mixed>>`, `callable(): TSut`. The bare `list<Command>` predated D001 and was never revisited; a concrete system type (dogfood example 2's `Ref`) would not type-check against it. No new decision — consistency fix. |
+| Amended    | maurice, 2026-07-30 — AC4's "Then" sharpened from "in a form SPEC-002 can filter on and replay against" to two named properties: `executed` is total and index-aligned (`count(executed) === count($commands)`, padding included — the filter form, SPEC-002 AC3), and it is replayable given a deterministic system (the baseline SPEC-002 AC8 measures divergence against). AC4 **records existing but previously unspecified behaviour**, not new behaviour: the padding that makes totality hold was built at AC2 without a test and without being stated anywhere as intended — incidental behaviour that happened to be correct. AC4 makes it a guarantee. No new decision. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -159,8 +160,15 @@ value.
 - **AC4 — the run records which commands executed**
   - Given any completed or failed run
   - When its result is inspected
-  - Then it exposes, per position, whether that command was executed — in a form
-    SPEC-002 can filter on and replay against.
+  - Then `executed` is **total and index-aligned** with the sequence:
+    `count(executed) === count($commands)`, one bool per position, with positions
+    after an early stop padded false. This index correspondence is what SPEC-002 AC3
+    filters on to drop non-executed commands.
+  - And `executed` is **replayable**: running the same sequence again against the same
+    *deterministic* system reproduces the same `executed`, because the runner adds no
+    variation of its own. This is only conditional on determinism — a non-deterministic
+    system is exactly the case where the replay diverges, which SPEC-002 AC8 detects and
+    reports; the guarantee here is the baseline that divergence is measured against.
 
 - **AC5 — an expected exception is not a failure**
   - Given a command whose `run()` throws, and whose `postCondition()` returns
@@ -399,7 +407,7 @@ least one test; every source file maps back to this spec.
 | AC1                  | tests/Unit/SequenceRunnerTest.php :: "runs a passing sequence to completion…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC2                  | tests/Unit/SequenceRunnerTest.php :: "stops at the first failing postcondition…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run; src/Failure.php; src/FailureKind.php; src/RunResult.php |
 | AC3                  | tests/Unit/SequenceRunnerTest.php :: "skips a command whose precondition is false…" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
-| AC4                  | —                           | —                    |
+| AC4                  | tests/Unit/SequenceRunnerTest.php :: "records a total, index-aligned, replayable execution path" (SPEC-001) | src/SequenceRunner.php :: SequenceRunner::run |
 | AC5                  | —                           | —                    |
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |

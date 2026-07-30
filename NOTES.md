@@ -724,3 +724,28 @@ inspect the same nullable `failure`/`exceptionClass` fields, so this is the esta
 there too, not a one-off. Filed with the other narrowing observations: prefer `?? throw` over a
 silent early-return whenever a test must narrow an optional before asserting on it.
 
+## Step 23 — AC4 assigned by who produces the property, not who consumes it (2026-07-30)
+
+AC4 ("the run records which commands executed") sharpened to two named properties: `executed`
+is total and index-aligned (`count === count($commands)`, padding included), and it is
+replayable given a deterministic system. The second could plausibly have been filed under
+SPEC-002 AC8, which consumes it — AC8 replays the path and aborts if it diverges. It stays in
+AC4 because it is a property of what `SequenceRunner` *produces*, not of what the shrinker
+*does* with it: AC8 measures a divergence from a baseline, and the baseline has to be
+guaranteed somewhere before a divergence means anything. Put it in SPEC-002 and a runner
+invariant lives in the shrinker spec, unreadable from where the runner is defined.
+
+That is the criterion, and it is the first time it was used here: **assign a property to the
+layer that produces it, not the layer that consumes it.** Useful again wherever a lower layer's
+guarantee is only *exercised* by a higher one (the replay baseline, later possibly the seed's
+reproducibility, the clone's freshness).
+
+AC4 was green on arrival, but not because it is redundant — it **records existing but
+unspecified behaviour**. The padding that makes totality hold was built at AC2 to satisfy
+`count(executed) === count($commands)` in one test's expected array, without being stated
+anywhere as intended; it was incidental behaviour that happened to be correct. AC4 turns it
+into a guarantee. That distinction matters for the next green-on-arrival case: check whether it
+is this kind (unspecified behaviour being pinned down, worth an AC) or genuinely redundant with
+an existing test (not worth one). Non-vacuity is shown by mutation — remove the padding and the
+totality assertion fails — since there is no unimplemented behaviour to make it red first.
+
