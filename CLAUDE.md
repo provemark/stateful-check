@@ -1,0 +1,184 @@
+# CLAUDE.md — stateful-check
+
+Local project instructions. Not published (gitignored).
+
+**Package:** `provemark/stateful-check` — namespace `Provemark\StatefulCheck\`
+Model-based (stateful) property testing for PHP: generate command sequences,
+run them against a system and a shadow model, shrink failures to a minimal
+counterexample.
+
+> Vendor/namespace is a single find-replace if you decide against `provemark`.
+> Do it before the first tag, not after.
+
+---
+
+## 1. Workflow — five mandatory steps
+
+No implementation code exists before an approved spec. In order, every time:
+
+1. **Spec.** Write or amend `specs/SPEC-###-<slug>.md` from `specs/TEMPLATE.md`.
+   Status starts `draft`. Do not write implementation code while `draft`.
+2. **Approval.** Maintainer (maurice) approves explicitly. Status → `approved`.
+   Record name + date in the header table.
+3. **Tests first.** Write the Pest tests for every acceptance criterion, each
+   tagged `->group('SPEC-###')`. They must fail for the right reason before any
+   implementation exists.
+4. **Implement.** Smallest change that makes the ACs pass. No speculative
+   generality, no features the specs do not require.
+5. **Traceability.** Fill the spec's traceability table (AC → test → source).
+   Status → `implemented`. Run `composer check`; it must be green.
+
+Amendments: only the Traceability section of an `approved` spec may change
+without re-approval. Everything else needs a proposed amendment or a new spec
+that supersedes.
+
+## 2. Hard domain rules
+
+Derived from prior art (`docs/prior-art.md`) and from what already went wrong in
+this space. Violating these produces a tool that lies, which is worse than no
+tool. Treat them as invariants of the codebase, not preferences.
+
+**R1 — Shrinking operates on the commands that actually ran.**
+A shortened sequence cannot become ill-formed: a command whose precondition no
+longer holds is skipped by the runner (SPEC-001 AC3), so the candidate stays a
+legal program with fewer executed commands. Shrinking therefore filters to the
+executed subset rather than re-validating candidates against the model. This is
+sound only while commands are independent (R9a). If symbolic results are ever
+added, this rule and SPEC-002 must be revisited together — that is the single
+change that would force re-validation back in.
+
+**R2 — The shrinker must never return a passing sequence.**
+A returned counterexample must still fail. This is the shrinker's central
+postcondition and must be asserted in the meta-suite, not assumed.
+
+**R3 — The result is a documented local minimum, not a global one.**
+"No single reduction step still fails" is the guarantee. Never claim minimality
+beyond that, in docs, README, or error output.
+
+**R4 — Shrinking requires determinism, and detects its absence.**
+The same sequence must produce the same verdict *and the same set of executed
+commands*. Divergence between the recorded execution path and an actual replay
+is the cheap, reliable signal that the system is non-deterministic: detect it
+there and abort with a clear message, rather than reporting a counterexample
+derived from unstable runs.
+
+**R5 — Never claim parallel execution or race detection.**
+PHP is share-nothing and request-scoped, and v0.1 is strictly sequential. Note
+that fast-check achieves race detection in single-threaded JavaScript via a
+deterministic scheduler over async operations; whether an analogous approach is
+possible in PHP with Fibers is an open research question (`docs/prior-art.md`),
+not a promise. Until it is answered and specced, the package claims sequential
+testing only.
+
+**R6 — The model is the oracle, so it must stay trivially verifiable.**
+If the model needs the complexity of the system, the bug is written twice. Model
+only what the system under test can actually expose; modelling unobservable
+state produces assertions that quietly pass.
+
+**R7 — No runtime dependencies.**
+The package owns its generation (SPEC-003), built on PHP 8.2's Random extension.
+`require` contains PHP and nothing else. This is not purity for its own sake: an
+earlier draft depended on Eris and carried two blockers that could have collapsed
+the design late (whether a seed can be threaded through it, and whether it can
+shrink a value outside its own `forAll` loop). Owning generation removes both,
+and a testing tool with no dependencies is materially easier to adopt.
+
+Eris support, if ever built, is an optional adapter behind the same `Generator`
+interface (SPEC-004), declared under `suggest`. It may not be used by the
+package's own suites, examples or docs. Never fork it; never depend on an
+unmerged PR.
+
+**R8 — Every shrinking behaviour needs a planted-bug meta-test.**
+`tests/Meta/` contains systems with deliberately planted bugs and asserts the
+exact minimal sequence the shrinker returns. A shrinker that merely does not
+crash is not tested.
+
+**R9 — Commands are reused across shrink candidates.**
+The shrinker replays the same `Command` objects many times. Any state a command
+carries leaks between candidates and destroys reproducibility.
+
+- **R9a — Commands must be independent.** A command may not depend on the return
+  value of an earlier command. v0.1 has no symbolic results; this is a deliberate
+  limitation (SPEC-001) and the precondition for R1.
+- **R9b — Commands must be stateless or cloneable.** The shrinker clones every
+  command before running a candidate. A command holding mutable state must
+  implement cloning; one that cannot be cloned safely must not carry state.
+
+## 3. Scope discipline
+
+v0.1 is: `Command` contract, model-driven sequential runner, sequence shrinking,
+PHPUnit + Pest integration. Nothing else.
+
+Order of work is fixed in `ROADMAP.md`, and the dependency is real: SPEC-002
+cannot be built or tested before SPEC-003, because shrinking a command's
+arguments needs generated values that carry a shrink context.
+
+Out of scope until separately specced: parallel or scheduled interleaving,
+symbolic results, generation strategies beyond uniform command choice (fast-check
+ignores bias here too — uniform is enough to be useful), targeted or
+coverage-guided generation, a general-purpose generator library, database or HTTP
+helpers, reporting formats.
+
+Also deliberately out of this repo: the separate package for verifying
+AI-generated code (spec-to-test traceability enforcement, mutation-score gates,
+tests untouchable by the implementing agent). It will build on this engine.
+Keeping it separate is what keeps this one general and its claims honest.
+
+If a proposed abstraction is not needed to express the two existing real suites
+(see §4), it does not go in.
+
+## 4. Dogfooding
+
+The package must be able to express, without extension, the hand-rolled stateful
+tests already written in `provemark/content-credentials`:
+
+- `tests/Unit/Property/BuilderSequencePropertyTest.php` — pure, in-memory,
+  immutable builder, blank-name error boundary predicted by the model.
+- `tests/Integration/Property/ProvenanceChainPropertyTest.php` — real HTTP
+  service, `sign`/`read` commands, skip-when-unreachable.
+
+Port both into `examples/` and keep them passing. They are the acceptance test
+for the API, and the honest answer to "does this abstraction earn its place".
+
+## 5. Quality gates
+
+`composer check` must pass before any spec reaches `implemented`:
+
+- Pest (`--group=SPEC-###` for the spec under work; full suite before done)
+- PHPStan at max, no baseline, no `@phpstan-ignore` without an inline reason
+- Pint (Laravel preset)
+- Meta-suite green (`--group=meta`)
+
+`declare(strict_types=1)` in every file. Classes `final` unless a spec requires
+extension. Value objects `readonly`. No suppression of errors to make a gate
+pass.
+
+## 6. Writing style for docs and README
+
+Plain, specific, and honest about limits. State what the tool cannot do in the
+same breath as what it can — the limitations section is a feature, and it is the
+reason a sceptical reader trusts the rest. No marketing register. No comparison
+tables against tools we have not run.
+
+## 7. Prior art is required reading
+
+`docs/prior-art.md` records what the mature implementations do and where they
+disagree. Consult it before designing anything; cite it in specs.
+
+The blueprint for shrinking is fast-check's `CommandsArbitrary` (read
+`CommandWrapper` first, then `CommandsArbitrary`). Its candidate strategy,
+execution filtering and replay-path mechanism are the basis for SPEC-002.
+
+Two deliberate divergences, both to be preserved:
+
+- fast-check merges the model transition and the postcondition into a single
+  `run(model, real)`; we keep `nextState` pure and separate (PropEr/stateful-check
+  split). The pure transition is what keeps the model usable as an oracle and lets
+  it be immutable. Do not "simplify" it to match fast-check without a spec.
+- fast-check's shrinking is integrated into the arbitrary; ours is an external
+  shrinker over a finished sequence. Originally forced by treating Eris as a black
+  box, now a deliberate choice (SPEC-003 open question) because it is simpler to
+  test in isolation.
+
+Do not invent a strategy without first recording why the existing one does not
+fit.

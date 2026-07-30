@@ -1,0 +1,57 @@
+{
+    "name": "provemark/stateful-check",
+    "description": "Model-based (stateful) property testing for PHP: generate command sequences, check them against a shadow model, shrink failures to a minimal counterexample.",
+    "keywords": [
+        "testing",
+        "property-based-testing",
+        "quickcheck",
+        "stateful",
+        "model-based",
+        "pest",
+        "phpunit"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "pestphp/pest": "^3.5",
+        "phpstan/phpstan": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Provemark\\StatefulCheck\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Provemark\\StatefulCheck\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "check": [
+            "@pint-test",
+            "@stan",
+            "@test"
+        ],
+        "test": "pest",
+        "meta": "pest --group=meta",
+        "stan": "phpstan analyse --memory-limit=512M",
+        "pint": "pint",
+        "pint-test": "pint --test"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "suggest": {
+        "giorgiosironi/eris": "Reuse existing Eris generators via the optional adapter (SPEC-004, not built)."
+    }
+}
