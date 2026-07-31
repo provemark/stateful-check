@@ -67,16 +67,9 @@ final class SequenceShrinker
         // nothing, so on a sequence with no structural reduction it stays zero (AC3).
         $executions = 0;
 
-        // Drop the commands that did not execute (AC3): skipped by a false precondition, or never
-        // reached after the failure. Both are `false` in `executed`; the shrinker does not
-        // distinguish them (RunResult documents the merge). Keep the GeneratedValues — the loop
-        // works on them and unwraps to bare commands only for the result.
-        $current = [];
-        foreach ($failing as $i => $value) {
-            if ($original->executed[$i]) {
-                $current[] = $value;
-            }
-        }
+        // Drop the commands that did not execute (AC3). The filter is a separate, capability-free
+        // step (see executedSubset): it reads the record and cannot run anything.
+        $current = $this->executedSubset($failing, $original);
 
         // Reduce to a local minimum (AC2). On each accepted candidate, restart generation from the
         // reduced sequence. Termination rests on every accepted candidate being *strictly shorter*
@@ -110,6 +103,34 @@ final class SequenceShrinker
             $executions,
             $budgetExhausted,
         );
+    }
+
+    /**
+     * The commands that actually executed (SPEC-002 AC3): drop every position marked `false` in the
+     * original run's `executed` record — skipped by a false precondition, or never reached after the
+     * failure (RunResult documents that it does not distinguish the two; the shrinker does not need
+     * to). This reads the record and nothing else: it takes no system and no `freshSut`, so it
+     * *cannot* discover the drop by trying candidates — the trial-and-error alternative is absent by
+     * construction, not merely unused. The GeneratedValues are kept whole; `shrink` unwraps to bare
+     * commands only for the result. Public and pure, like `candidateReductions`, so the filter can be
+     * tested in isolation from the shrink loop and from AC8's replay.
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $failing
+     * @return list<GeneratedValue<Command<TModel, TSut, mixed>>>
+     */
+    public function executedSubset(array $failing, RunResult $original): array
+    {
+        $subset = [];
+        foreach ($failing as $i => $value) {
+            if ($original->executed[$i]) {
+                $subset[] = $value;
+            }
+        }
+
+        return $subset;
     }
 
     /**

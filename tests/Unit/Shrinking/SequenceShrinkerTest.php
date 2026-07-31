@@ -48,9 +48,49 @@ final class Cmd implements Command
     }
 }
 
-it('drops non-executed commands by reading the record, without running a candidate (SPEC-002 AC3)', function () {
-    // Only b executed and failed; a was skipped (precondition false) and c was never reached (after
-    // the failure). Both meanings of a false position drop out, leaving b.
+/**
+ * A command with a configurable precondition and postcondition, so a *real* run produces a chosen
+ * execution path and a real `Failure` — no fabricated `RunResult` needed. Used where the shrinker
+ * replays the sequence and so requires it to genuinely reproduce (AC8).
+ *
+ * @implements Command<null, mixed, null>
+ */
+final class Fixed implements Command
+{
+    public function __construct(private string $label, private bool $pre, private bool $post) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return $this->pre;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $this->post;
+    }
+
+    public function __toString(): string
+    {
+        return $this->label;
+    }
+}
+
+it('filters the executed subset by reading the record, with no capacity to run a command (SPEC-002 AC3)', function () {
+    // The trial-and-error CATCH, isolated from the shrink loop and from AC8's replay. `executedSubset`
+    // takes only the sequence and the recorded run — no `freshSut`, no system — so it *structurally
+    // cannot* discover the drop by trying candidates (a stronger guarantee than counting sut
+    // constructions: the capability is absent, not merely unused). A fabricated record is fine here:
+    // the filter reads it, it does not validate that it reproduces (that is shrink()'s job, AC8).
     $failing = [
         new GeneratedValue(new Cmd('a')), // skipped: precondition false
         new GeneratedValue(new Cmd('b')), // executed, and failed here
@@ -58,30 +98,32 @@ it('drops non-executed commands by reading the record, without running a candida
     ];
     $original = new RunResult(false, [false, true, false], new Failure(FailureKind::PostconditionFalse, 1, Cmd::class));
 
-    $freshSutCalls = 0;
-    $freshSut = function () use (&$freshSutCalls): stdClass {
-        $freshSutCalls++;
-
-        return new stdClass;
-    };
-
-    $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing,
-        $original,
-        Gen::constant(new Cmd('unused')),
-        $freshSut,
-        null,
-    );
+    $subset = (new SequenceShrinker(new SequenceRunner))->executedSubset($failing, $original);
 
     // Both the skipped (a) and never-reached (c) commands are gone; b remains.
-    expect(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['b']);
+    expect(array_map(fn (GeneratedValue $value): string => (string) $value->value, $subset))->toBe(['b']);
+})->group('SPEC-002');
 
-    // The claim is specifically about the FILTER: it drops non-executed commands by reading
-    // `executed`, running nothing to discover the drop. (A trial-and-error shrinker would call
-    // freshSut per command.) A single-command representation has no further reduction to generate,
-    // so no candidate runs and this stays true once the shrink loop exists — the drop's zero
-    // executions are not entangled with the loop's.
-    expect($freshSutCalls)->toBe(0)
+it('drops non-executed commands without running a candidate (SPEC-002 AC3)', function () {
+    // The end-to-end CLAIM: shrink() composes the filter, and dropping the non-executed commands costs
+    // zero candidate executions. `Fixed` makes the run genuine (a skips on a false precondition, b
+    // fails its postcondition, c is never reached) so AC8's replay reproduces it and does not abort.
+    $freshSut = fn (): stdClass => new stdClass;
+    $failing = [
+        new GeneratedValue(new Fixed('a', pre: false, post: true)), // skipped: precondition false
+        new GeneratedValue(new Fixed('b', pre: true, post: false)),  // executed, and failed here
+        new GeneratedValue(new Fixed('c', pre: true, post: true)),   // never reached (after b)
+    ];
+    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+
+    $result = (new SequenceShrinker(new SequenceRunner))->shrink(
+        $failing, $original, Gen::constant(new Fixed('unused', pre: true, post: true)), $freshSut, null,
+    );
+
+    // b remains, and no candidate ran to discover the drop: the filter reads the record, it does not
+    // try. `executions` is the precise claim; the structural catch above proves the filter *cannot*
+    // trial-and-error even if a mutant made this counter lie.
+    expect(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['b'])
         ->and($result->executions)->toBe(0);
 })->group('SPEC-002');
 
