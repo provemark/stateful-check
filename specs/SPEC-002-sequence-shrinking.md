@@ -55,9 +55,10 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
      retained suffix, always keeping the last executed command;
   2. **per-command argument** — for position *i*, `alphabet->shrink(generatedValues[i])` (the
      generation core, SPEC-003), replacing that one command with each reduced value; sequence
-     length unchanged. **This family may only be added once AC9's budget exists**: the loop's
-     termination rests on every accepted candidate being strictly *shorter* (a structural-family
-     property), and a length-preserving family escapes that argument — the budget is its safety net.
+     length unchanged. **This family may only be added once AC9's budget exists** (now satisfied,
+     since AC9 is implemented): the loop's termination rests on every accepted candidate being
+     strictly *shorter* (a structural-family property), and a length-preserving family escapes that
+     argument — the budget is its safety net.
   (No empty-sequence probe: it always passes in this model, so trying it is a guaranteed-useless
   execution — removed with AC5, D022.)
 - `Failure::sameKindAs()` — the identity comparison SPEC-001 declared and deferred to its only
@@ -306,5 +307,5 @@ least one test; every source file maps back to this spec.
 | AC6                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "clones a command between candidates, so its mutable state does not leak" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::stillFails` |
 | AC7                  | —                           | —                    |
 | AC8                  | —                           | —                    |
-| AC9                  | —                           | —                    |
+| AC9                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "respects the budget: reaching the minimum within it is minimal, one short is budget-limited" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` :: `$budgetExhausted` |
 | AC10                 | `tests/Unit/FailureTest.php` (group `SPEC-002`) | `src/Failure.php` :: `Failure::sameKindAs` |

@@ -28,6 +28,7 @@ final class SequenceShrinker
 {
     public function __construct(
         private readonly SequenceRunner $runner,
+        private readonly int $budget = 100,
     ) {}
 
     /**
@@ -83,9 +84,17 @@ final class SequenceShrinker
         // shrinks on every restart and the loop cannot run forever. A length-preserving family (the
         // argument family, AC7) would break that; it may be added only once AC9's budget provides the
         // safety net.
+        $budgetExhausted = false;
         do {
             $reduced = false;
             foreach ($this->candidateReductions($current) as $candidate) {
+                // Checked before running, so a run that confirms the local minimum on its last allowed
+                // execution exits the pass naturally below (no next candidate to trip this) and is NOT
+                // budget-limited; the budget only fires when it interrupts a pass mid-search (AC9).
+                if ($executions >= $this->budget) {
+                    $budgetExhausted = true;
+                    break 2;
+                }
                 $executions++;
                 if ($this->stillFails($candidate, $baseline, $freshSut, $initialModel)) {
                     $current = $candidate;
@@ -99,6 +108,7 @@ final class SequenceShrinker
             array_map(static fn (GeneratedValue $value): Command => $value->value, $current),
             count($failing),
             $executions,
+            $budgetExhausted,
         );
     }
 

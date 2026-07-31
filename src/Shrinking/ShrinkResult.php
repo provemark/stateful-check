@@ -10,8 +10,10 @@ use Provemark\StatefulCheck\Command;
  * The result of shrinking a failing sequence (SPEC-002): the counterexample, unwrapped to bare
  * commands for rendering, plus how far it got.
  *
- * Minimal for AC3: the counterexample, the original length, and the number of candidate executions
- * it took. The budget-exhausted and non-deterministic flags arrive with AC9 and AC8.
+ * The counterexample, the original length, the number of candidate executions it took, and whether
+ * the budget stopped it before it confirmed a local minimum (AC9). `$budgetExhausted` means
+ * "budget-limited, not minimal": a run that confirmed the minimum within budget leaves it false,
+ * even if it used the last allowed execution. The non-determinism flag arrives with AC8.
  *
  * @template TModel
  * @template TSut
@@ -25,5 +27,6 @@ final readonly class ShrinkResult
         public array $commands,
         public int $originalLength,
         public int $executions,
+        public bool $budgetExhausted = false,
     ) {}
 }

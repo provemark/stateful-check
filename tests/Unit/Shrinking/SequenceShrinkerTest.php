@@ -448,3 +448,50 @@ it('clones a command between candidates, so its mutable state does not leak (SPE
         expect($ran)->toBe(0);
     }
 })->group('SPEC-002');
+
+it('respects the budget: reaching the minimum within it is minimal, one short is budget-limited (SPEC-002 AC9)', function () {
+    $freshSut = fn (): Ref => new Ref(0);
+    $failing = [new GeneratedValue(new Trigger), new GeneratedValue(new Noise), new GeneratedValue(new Trigger)];
+    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+    $originalFailure = $original->failure ?? throw new RuntimeException('the failing sequence did not fail');
+
+    // Measure how many candidate runs reaching the local minimum costs — do not hardcode it. That
+    // number is an implementation detail of candidateReductions and changes when the strategy or
+    // families change (AC7); the "last allowed run confirms the minimum vs one short" distinction
+    // must stay valid regardless. The measuring budget is generous but FINITE — PHP_INT_MAX would
+    // hang the suite with no error if the loop ever failed to terminate (e.g. once a length-
+    // preserving family lands). Assert the measurement itself terminated naturally, well under
+    // budget, so N is a valid natural cost.
+    $measuringBudget = 1000;
+    $unbounded = (new SequenceShrinker(new SequenceRunner, budget: $measuringBudget))->shrink(
+        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+    );
+    $n = $unbounded->executions;
+    $minimum = array_map(fn (Command $c): string => (string) $c, $unbounded->commands);
+    expect($unbounded->budgetExhausted)->toBeFalse() // the measurement was not itself budget-limited
+        ->and($n)->toBeGreaterThan(1)                // non-vacuous: the minimum takes more than one run
+        ->and($n)->toBeLessThan($measuringBudget);   // and it terminated well under the measuring budget
+
+    // Budget exactly N: the minimum is confirmed on the last allowed run — minimal, NOT budget-
+    // limited, even though executions === budget. The flag means "stopped before the minimum", not
+    // "budget reached".
+    $atBudget = (new SequenceShrinker(new SequenceRunner, budget: $n))->shrink(
+        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+    );
+    expect($atBudget->budgetExhausted)->toBeFalse()
+        ->and($atBudget->executions)->toBe($n)
+        ->and(array_map(fn (Command $c): string => (string) $c, $atBudget->commands))->toBe($minimum);
+
+    // Budget N - 1: one run short of confirming the minimum — budget-limited, best-so-far returned.
+    $underBudget = (new SequenceShrinker(new SequenceRunner, budget: $n - 1))->shrink(
+        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+    );
+    expect($underBudget->budgetExhausted)->toBeTrue()
+        ->and($underBudget->executions)->toBe($n - 1);
+
+    // AC1 invariant holds even when budget-limited: the returned sequence still fails, same kind.
+    $rerun = (new SequenceRunner)->run($underBudget->commands, $freshSut, null);
+    $rerunFailure = $rerun->failure ?? throw new RuntimeException('the budget-limited result did not fail');
+    expect($rerun->passed)->toBeFalse()
+        ->and($rerunFailure->sameKindAs($originalFailure))->toBeTrue();
+})->group('SPEC-002');

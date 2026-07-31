@@ -1047,3 +1047,24 @@ bearing**: a family whose first accepted candidate is not a local minimum (a ric
 or the argument family), against which a mutant that drops the restart fails an AC7 case. **If AC7
 does not make it load-bearing, the `do/while` is speculative code and §4 requires removing it** — keep
 a single pass. This is a required step of AC7, to be done or ticked off there, not deferred again.
+
+## Step 35 — AC9 budget: "stopped before the minimum", not "budget reached" (2026-07-31)
+
+The budget bounds candidate executions. The flag `budgetExhausted` means *budget-limited, not
+minimal* — the check sits at the top of the foreach, so a run that confirms the local minimum on its
+last allowed execution exits the pass naturally (no next candidate to trip the check) and is not
+flagged, even though `executions === budget`. It only fires when the budget interrupts a pass
+mid-search. Two mutants pin this in opposite directions so neither miss is caught by accident:
+flagging on `executions >= budget` wrongly flags the at-budget case (fails Test A); never setting the
+flag leaves the interrupted case unflagged (fails Test B). R3 both ways — claim no more than a local
+minimum, and no less.
+
+The test **measures** the minimum's cost N rather than hardcoding it (an implementation detail of
+`candidateReductions` that changes when the strategy or families change at AC7), then checks budget N
+(minimal) versus N-1 (budget-limited). The measuring budget is generous but **finite**, and the test
+asserts the measurement terminated under it — `PHP_INT_MAX` would hang the suite with no error if the
+loop ever failed to terminate. AC1 asserted on the budget-limited result too: it still fails
+`sameKindAs` the original.
+
+With the budget in place, the spec condition that blocked the length-preserving argument family is
+**satisfied** — a forward reference to AC7 (alongside the restart gate) to tick off at finalisation.
