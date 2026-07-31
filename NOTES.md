@@ -1097,3 +1097,42 @@ proxy that AC8 would have re-entangled (its value shifts 0→1 with the replay);
 stays the end-to-end claim, the structural filter test is the independent catch. This is maurice's
 "make the filter separately callable" alternative, chosen over "keep the counter at value 1" because
 the value-1 form both re-conflates and cannot be committed green on the pre-AC8 shrinker.
+
+## Step 37 — AC7 planted bug; a family narrower than its own spec; restart proven load-bearing (2026-07-31)
+
+The planted case (`tests/Meta/OrderDependentShrinkTest.php`): an order-dependent bug — `OrderTrip`
+corrupts the system's value only when `OrderPrime` ran earlier, the model is the honest oracle — with
+noise on both sides of `Prime`, so the known minimum is `[Prime, Trip]` and reaching it needs to drop
+both the leading and the middle noise.
+
+**The family was narrower than its own specification** — the mirror of the pre-D001 staleness (there
+the spec lagged the code; here the code lagged the spec). SPEC-002 line 55 says the structural family
+is "hold a prefix of length k, **shrink the length of the retained suffix**, always keeping the last
+executed command," but `candidateReductions` fixed the suffix at length one (just the last command).
+So it could drop a middle chunk that runs up to the last, but never the *leading* junk — it stalled
+at `[noise, prime, trip]`. maurice caught this from the spec text before 7a and had me verify it: the
+red output confirmed the exact stall, so it was a defect to fix (widen to the real family), not a
+design choice between enriching the family and redefining the minimum. Writing the meta-case first is
+what surfaced it — the discipline earning its keep. The fix widened the family to drop any one
+contiguous chunk `[k, k+s)` while keeping prefix and last; no spec change, the code caught up.
+
+**Order is now load-bearing** where it was not for a linear family. The accept-loop takes the first
+still-failing candidate, so the offer order is the greedy path. Chosen: **largest drop first** (`s`
+descending, `k` ascending within), matching fast-check's length-shrinking — a big reduction accepted
+early reaches a small minimum in fewer passes. Documented at `candidateReductions` like the choice
+order in `Gen::elements`.
+
+**The restart is load-bearing (overturns the Step 34 suspicion).** With the narrow family a single
+pass sufficed, so the restart looked redundant. The widened family drops one *contiguous* chunk per
+candidate, but `[Prime, Trip]` from `[Noise, Prime, Noise, Trip]` needs two *non-contiguous* drops —
+leading and middle — so it is only reached across two passes. Mutant (restart → single pass) stalls at
+`[prime, noise, trip]`, confirming necessity. Kept, not removed; the Step 34 gate is discharged.
+
+**Budget default (100) reassessed, as maurice asked.** The candidate count is now quadratic in length
+(`L·(L−1)/2` per pass), where the fixed-suffix family was linear. For the doubles and the dogfood
+example lengths it is nothing; for a length-~14 sequence one pass is ~91 candidates, so 100 covers
+roughly a single pass there and several passes on shorter sequences. Verdict: 100 stays a defensible
+*default* — a safety net, user-configurable via the constructor — but it is now a **real** bound on
+long sequences (D007's intent), not a formality. What makes a tight budget safe rather than silently
+wrong is AC9's honest `budgetExhausted` flag ("stopped before the minimum"). No change to the default;
+recorded so a later reader knows the quadratic cost was weighed, not overlooked.

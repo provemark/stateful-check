@@ -94,11 +94,14 @@ final class SequenceShrinker
         $current = $this->executedSubset($failing, $original);
 
         // Reduce to a local minimum (AC2). On each accepted candidate, restart generation from the
-        // reduced sequence. Termination rests on every accepted candidate being *strictly shorter*
-        // than its predecessor — a property of the structural family, not of this loop — so `$current`
-        // shrinks on every restart and the loop cannot run forever. A length-preserving family (the
-        // argument family, AC7) would break that; it may be added only once AC9's budget provides the
-        // safety net.
+        // reduced sequence. The restart is load-bearing (AC7 proves it): the family drops one
+        // contiguous chunk per candidate, so a minimum needing two non-contiguous drops — leading and
+        // middle junk around the failing commands — is only reached across successive passes. A single
+        // pass stalls one drop short. Termination rests on every accepted candidate being *strictly
+        // shorter* than its predecessor — a property of the structural family, not of this loop — so
+        // `$current` shrinks on every restart and the loop cannot run forever. A length-preserving
+        // family (the argument family) would break that; it may be added only once AC9's budget
+        // provides the safety net.
         $budgetExhausted = false;
         do {
             $reduced = false;
@@ -195,11 +198,24 @@ final class SequenceShrinker
     }
 
     /**
-     * Structural reduction candidates (SPEC-002 AC4): hold a prefix of length k and always keep
-     * the last command, dropping the middle. The last command caused the failure, so removing it
-     * is never a useful reduction and no candidate ever does. k runs up to `count - 2`, so the
-     * full sequence (no reduction) is never yielded; a sequence of length 0 or 1 has no structural
-     * reduction and yields nothing. The per-command argument family is deferred (see `shrink`).
+     * Structural reduction candidates (SPEC-002 AC4): hold a prefix `[0, k)` and a retained suffix
+     * `[k + s, length)` that always ends at the last command, dropping the middle chunk `[k, k + s)`
+     * of length `s`. The last command caused the failure, so removing it is never a useful reduction
+     * and no candidate ever does (the suffix always includes it). A sequence of length 0 or 1 has no
+     * reduction and yields nothing; the full sequence is never yielded (`s >= 1` always drops at
+     * least one). The per-command argument family is deferred (see `shrink`).
+     *
+     * This is the full family of the spec — "hold a prefix, shrink the length of the retained
+     * suffix" — not just the `s = length - 1` slice (suffix fixed at the last command). Reaching a
+     * minimum like `[A, B]` from `[junk, A, junk, B]` needs to drop the *leading* junk, which only a
+     * variable-length suffix can do; the middle junk then drops on a later pass (AC7 proves both).
+     *
+     * Order is **largest drop first** (`s` descending), matching fast-check's length-shrinking: the
+     * accept-loop takes the first still-failing candidate, so this order is the greedy path, and a big
+     * reduction accepted early reaches a small minimum in fewer passes. Within one `s`, the drop moves
+     * left to right (`k` ascending). The candidate count is quadratic in `length` (`length·(length−1)/2`
+     * per pass), where the old fixed-suffix family was linear — which is what makes AC9's budget a real
+     * bound on long sequences, not a formality (D007).
      *
      * @template TModel
      * @template TSut
@@ -214,10 +230,10 @@ final class SequenceShrinker
             return;
         }
 
-        $last = $sequence[$length - 1];
-
-        for ($k = 0; $k < $length - 1; $k++) {
-            yield [...array_slice($sequence, 0, $k), $last];
+        for ($s = $length - 1; $s >= 1; $s--) {
+            for ($k = 0; $k <= $length - 1 - $s; $k++) {
+                yield [...array_slice($sequence, 0, $k), ...array_slice($sequence, $k + $s)];
+            }
         }
     }
 }
