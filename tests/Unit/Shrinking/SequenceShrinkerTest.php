@@ -326,9 +326,12 @@ it('shrinks to a local minimum: no single further reduction still fails (SPEC-00
         ->and($rerunFailure->sameKindAs($originalFailure))->toBeTrue();
 
     // AC2: it reduced (Noise dropped), running candidates as it went, and it is a local minimum —
-    // no single further reduction still reproduces the original failure.
+    // no single further reduction still reproduces the original failure. `originalLength` records
+    // where it started: it is the pre-shrink length (3), distinct from the shrunk `commands` (2), so
+    // a consumer can see the result actually reduced. Non-vacuous precisely because they differ here.
     expect(count($result->commands))->toBeLessThan(count($failing))
-        ->and($result->executions)->toBeGreaterThan(0);
+        ->and($result->executions)->toBeGreaterThan(0)
+        ->and($result->originalLength)->toBe(count($failing));
 
     foreach ((new SequenceShrinker(new SequenceRunner))->candidateReductions($result->commands) as $candidate) {
         $r = (new SequenceRunner)->run($candidate, $freshSut, null);

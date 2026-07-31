@@ -161,4 +161,16 @@ it('shrinks an order-dependent bug to its known minimal sequence [Prime, Trip] (
 
     // The exact minimal sequence, by string form (SPEC-002 AC7).
     expect(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['prime', 'trip']);
+
+    // AC1 invariant, proven here: the returned counterexample, re-run against a fresh system, still
+    // fails and by the same identity (sameKindAs). The `passed === false` half is genuinely load-
+    // bearing — a shrinker that over-reduced to a passing sequence would break it. The `sameKindAs`
+    // half cannot bite in THIS system (every failure here is PostconditionFalse at Trip, so the loop
+    // has no different-kind failure to drift to); its mutant protection lives in the unit "does not
+    // drift…" test, where dropping Prime yields an UnexpectedException. See the AC1 traceability note.
+    $rerun = (new SequenceRunner)->run($result->commands, $freshSut, 0);
+    $originalFailure = $original->failure ?? throw new RuntimeException('the planted sequence did not fail');
+    $rerunFailure = $rerun->failure ?? throw new RuntimeException('the shrunk sequence did not fail');
+    expect($rerun->passed)->toBeFalse()
+        ->and($rerunFailure->sameKindAs($originalFailure))->toBeTrue();
 })->group('meta')->group('SPEC-002');

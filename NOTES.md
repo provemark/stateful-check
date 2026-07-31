@@ -1166,3 +1166,31 @@ Two observations maurice drew, both deliberately **not** made into rules:
    traceability pass at `implemented` catches it. So it reinforces why that pass exists rather than
    asking for a new rule: prose and code diverge silently, and a periodic reconciliation is the only
    thing that surfaces it.
+
+## Step 39 — 7d finalisation: AC1's real proof, and why originalLength is kept where $alphabet went (2026-07-31)
+
+**AC1's proof, and its honest limit.** The AC7 meta-case now asserts AC1 (the returned `[Prime, Trip]`,
+re-run, still fails `sameKindAs` the original). It is green on arrival — the shrinker only ever returns
+a sequence it just made fail (the fourth kind from Step 32's distinction) — so its non-vacuity is
+proven by a mutant: dropping `sameKindAs` from the accept-condition. The result: the meta-case stays
+green (its system has one failure kind, so the loop has no different-kind failure to drift to), while
+the unit "does not drift…" test falls. So the `sameKindAs` half is genuinely proven *there* (Prime/Blow,
+where dropping Prime yields an UnexpectedException), and the meta-case's `passed === false` half is what
+it protects — a shrinker that over-reduced to a passing sequence breaks it. Recorded on AC1's
+traceability row rather than left as an overclaim of "proven by AC7".
+
+**The three-sided check did not close silently — it surfaced `ShrinkResult::$originalLength`**, a field
+set but never read or asserted, no AC. Kept and tested (asserted in the AC2 test, where original 3 ≠
+shrunk 2 makes it non-vacuous), *not* removed like `$alphabet` — and the distinction matters, or this
+reads as inconsistency. `$alphabet`/the wrapper were an input *mechanism* carrying a dead code path,
+built on an assumption about how shrinking would work that did not arrive. `originalLength` is an output
+*fact* about what happened, recorded when it is known, with no path and no assumption behind it. It
+belongs to the group that describes the outcome — `executions`, `budgetExhausted`,
+`abandonedNonDeterministic` — and without it a consumer cannot see whether the shrink reduced anything
+at all, the first question anyone asks of a counterexample. Carrying consistency to the point where a
+result object cannot describe its own outcome is the rule pushed one step too far. The three-sided
+check's job is to force that judgement into the open, not to auto-delete; here it kept the field, at
+$alphabet it removed the layer.
+
+**AC6's source corrected** stillFails → replay: the clone moved into `replay` when it was extracted at
+AC8. Another prose-drift the traceability pass caught — small, but the same class as D021.
