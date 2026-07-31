@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use Provemark\StatefulCheck\Generation\Gen;
 use Provemark\StatefulCheck\Generation\Generator;
 use Provemark\StatefulCheck\Generation\Source;
+use Provemark\StatefulCheck\Shrinking\SequenceShrinker;
 
 /**
  * The property entry point (SPEC-005): the thing a user calls to generate command sequences from a
@@ -52,6 +53,9 @@ final class StatefulProperty
         }
     }
 
+    /**
+     * @return PropertyResult<TModel, TSut>
+     */
     public function check(int $seed): PropertyResult
     {
         // One seeded stream for the whole check: it advances across sequences, so each run draws a
@@ -85,9 +89,24 @@ final class StatefulProperty
             $result = (new SequenceRunner)->run($commands, fn () => $setup->system, $setup->model);
 
             if (! $result->passed) {
-                // Stop at the first failing sequence. AC2 will enrich this with the shrunk
-                // counterexample and its Failure; for now it is a bare failure verdict.
-                return new PropertyResult(passed: false);
+                // AC2: the first failing sequence. Hand its run to the shrinker — the bare commands,
+                // the failing RunResult, a `freshSut` that rebuilds the system **per candidate** (so no
+                // candidate inherits another's state, the R9b leak one layer up), and the model — and
+                // report the shrunk counterexample. The Failure is the run's own: the shrinker
+                // guarantees the shrunk sequence fails the same kind (D020), and it is not re-run here.
+                $shrunk = (new SequenceShrinker(new SequenceRunner))->shrink(
+                    $commands,
+                    $result,
+                    fn () => ($this->setup)($initialValue)->system,
+                    $setup->model,
+                );
+
+                return new PropertyResult(
+                    passed: false,
+                    counterexample: $shrunk->commands,
+                    failure: $result->failure,
+                    executions: $shrunk->executions,
+                );
             }
 
             $anyExecuted = $anyExecuted || in_array(true, $result->executed, true);
@@ -98,9 +117,22 @@ final class StatefulProperty
             // preconditions): the property verified nothing. A vacuous run must not look like a pass
             // (AC10, the runtime counterpart of AC6) — report failure, flagged as vacuous so it is not
             // mistaken for a counterexample.
-            return new PropertyResult(passed: false, vacuous: true);
+            return new PropertyResult(passed: false, vacuous: true, counterexample: $this->noCounterexample());
         }
 
-        return new PropertyResult(passed: true);
+        return new PropertyResult(passed: true, counterexample: $this->noCounterexample());
+    }
+
+    /**
+     * A typed empty counterexample for the pass and vacuous branches. PHPStan cannot infer TModel/TSut
+     * from the constructor's bare `[]` default, so those branches would otherwise widen the result to
+     * `PropertyResult<mixed, mixed>` and clash with `check()`'s return type. An empty list is a valid
+     * `list<Command<TModel, TSut, mixed>>`, so this states the element type without an inline `@var`.
+     *
+     * @return list<Command<TModel, TSut, mixed>>
+     */
+    private function noCounterexample(): array
+    {
+        return [];
     }
 }

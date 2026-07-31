@@ -397,3 +397,82 @@ it('reproduces the same generation from the same seed, and varies with a differe
     expect($drawnWith(1))->toBe($drawnWith(1))
         ->and($drawnWith(1))->not->toBe($drawnWith(2));
 })->group('SPEC-005');
+
+// --- AC2: a failing property returns a shrunk counterexample, with a fresh system per candidate. ---
+
+/** A mutable system counter, built fresh by setup. If the shrinker reused one across candidates, its
+ *  reduced candidate would run on a dirty counter and reproduce the failure wrongly. */
+final class IntBox
+{
+    public int $value = 0;
+}
+
+/**
+ * Increments the system counter; its postcondition fails once it reaches 2. Reducing `[inc, inc]` to
+ * `[inc]` must run on a FRESH counter (1 < 2, passes) so the single command does not reproduce — which
+ * only holds if each shrink candidate gets a fresh system. A leaked system shrinks wrongly to `[inc]`.
+ *
+ * @implements Command<null, IntBox, null>
+ */
+final class IncrementFailsAtTwo implements Command
+{
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        $sut->value++;
+
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $sut->value < 2;
+    }
+
+    public function __toString(): string
+    {
+        return 'inc';
+    }
+}
+
+it('shrinks the first failing sequence to a counterexample, with a fresh system per candidate (SPEC-005 AC2)', function () {
+    $setups = new Tally;
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new IncrementFailsAtTwo)],
+        setup: function (mixed $initial) use ($setups): Setup {
+            $setups->count++;
+
+            return new Setup(model: null, system: new IntBox);
+        },
+        initial: Gen::constant(null),
+        maxLength: 2,
+        runs: 1,             // one generation run, so the setup-call count is unambiguous
+    );
+
+    $result = $property->check(seed: 1);
+
+    // A real failure (not vacuous), carrying the shrunk counterexample and its Failure. The
+    // counterexample is [inc, inc], not [inc]: reducing to a single inc runs on a FRESH counter
+    // (1 < 2, passes) so it does not reproduce — which holds only if each candidate gets a fresh
+    // system. A leaked system would shrink wrongly to [inc]. So this assertion is itself a
+    // fresh-system check.
+    expect($result->passed)->toBeFalse()
+        ->and($result->vacuous)->toBeFalse()
+        ->and($result->failure)->not->toBeNull()
+        ->and(array_map(fn (Command $c): string => (string) $c, $result->counterexample))->toBe(['inc', 'inc']);
+
+    // The AC7 guarantee, one layer deeper (AC8's precursor): exactly one setup call per execution — the
+    // failing generation run (1), the shrinker's non-determinism replay (1), and each candidate
+    // execution (ShrinkResult::$executions). Exact, not a lower bound: an impl that called setup once
+    // extra and shared that one system across candidates would not match.
+    expect($setups->count)->toBe(2 + $result->executions);
+})->group('SPEC-005');

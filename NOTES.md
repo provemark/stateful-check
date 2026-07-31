@@ -1358,3 +1358,40 @@ Two things recorded in the same motion (maurice):
   reproduces only if nothing between seed and outcome introduces non-determinism — no unordered
   iteration, no wall-clock time, no `spl_object_id` ordering. True today but nowhere required; stating it
   makes an accidental truth checkable, and the place a future non-deterministic addition would be caught.
+
+## Step 46 — SPEC-005 AC2: the failure path, a fresh system per candidate, and a predictive lesson (2026-07-31)
+
+On the first failing sequence, `check()` hands the run to SPEC-002's `shrink()` — the bare commands,
+the failing `RunResult`, and a `freshSut` — and returns the shrunk counterexample, its `Failure`, and
+the shrink's `executions`. The verify-first combination check (a throwaway: does `PropertyResult<TModel,
+TSut>` fill from `ShrinkResult->commands` at max?) passed before any code was written.
+
+**The freshSut is the AC7 guarantee, one layer deeper — and it is not the generation form.** At AC1 the
+run used a *captured* `fn () => $setup->system` (one setup call, AC7). But the shrinker calls `freshSut`
+**per candidate**, so a captured system would be shared across candidates — the R9b leak one level up,
+and a subtly wrong counterexample. So the shrink's freshSut re-calls setup: `fn () =>
+($this->setup)($initialValue)->system`. Two observations pin it: the counterexample is `[inc, inc]`, not
+`[inc]` (reducing to one inc runs on a fresh counter, 1 < 2, so it does not reproduce — only true with
+fresh systems; a leak shrinks wrongly to `[inc]`), and the exact setup count. maurice's sharpening: not
+`setups > 1` (a lower bound an "extra-call-then-share" impl survives) but `setups === 2 + executions`.
+The `2` is 1 generation run + 1 for the shrinker's AC8 non-determinism replay (a freshSut call not
+counted in `executions`) — a refinement of the proposed `1 + executions` I reasoned and then confirmed
+empirically. The number matching the model is information the shrinker behaves as expected, not noise.
+
+**A combination wall after building (fourth of its kind), fixed cleanly.** Making `PropertyResult`
+generic, the pass and vacuous branches return `PropertyResult<mixed, mixed>` — an empty counterexample
+gives PHPStan nothing to bind `TModel/TSut` from, clashing with `check()`'s `@return`. The verify-first
+had checked the *failure* combination, not this pass/vacuous return typing. Fixed with a typed
+`noCounterexample(): list<Command<TModel, TSut, mixed>>` returning `[]` — an empty list is a valid such
+list, so the element type is stated without an inline `@var`.
+
+**A predictive lesson on choosing an observation (n=3).** AC2's shrink broke the sub-step-2 stop-test:
+its `setups->count === 2` counted setup calls, and the shrinker builds systems too, so the count stopped
+measuring the stop. Third time a later AC invalidated an earlier observation — AC8 broke the AC3 filter
+test the same way. Both times a counter conflated two things because the second did not yet exist; both
+fixes moved to the quantity *closer to the claim* (there, `executions`; here, the initial-draw count,
+which the shrinker never touches because it reuses the captured initial). The forward-looking rule this
+yields, for choosing a test's observation: ask not only "does this catch the fault" but "will this keep
+measuring what I mean when layers are added below it". A proxy that happens to equal the real quantity
+today drifts the moment a new layer shares the proxy's cause. Revised separately, before AC2, and shown
+to still bite (a continue-past-failure mutant makes the initial-draw count 5, not 2).
