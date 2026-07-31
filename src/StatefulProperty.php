@@ -64,6 +64,10 @@ final class StatefulProperty
         $lengths = Gen::integers(1, $this->maxLength, origin: 1);
         $commandGenerator = Gen::alphabet($this->alphabet);
 
+        // Whether any command executed across all runs (AC10). Read from the runner's own `executed`
+        // record — nothing new is counted.
+        $anyExecuted = false;
+
         for ($run = 0; $run < $this->runs; $run++) {
             // Draw one sequence: a length in [1, maxLength] (origin 1), then that many commands drawn
             // uniformly from the alphabet.
@@ -85,6 +89,16 @@ final class StatefulProperty
                 // counterexample and its Failure; for now it is a bare failure verdict.
                 return new PropertyResult(passed: false);
             }
+
+            $anyExecuted = $anyExecuted || in_array(true, $result->executed, true);
+        }
+
+        if (! $anyExecuted) {
+            // Every sequence passed, but not one command ever executed (all skipped by false
+            // preconditions): the property verified nothing. A vacuous run must not look like a pass
+            // (AC10, the runtime counterpart of AC6) — report failure, flagged as vacuous so it is not
+            // mistaken for a counterexample.
+            return new PropertyResult(passed: false, vacuous: true);
         }
 
         return new PropertyResult(passed: true);

@@ -8,6 +8,7 @@
 | Amended    | maurice, 2026-07-31 — AC6 broadened: it now guards `runs < 1` alongside an empty alphabet and `maxLength < 1` (all three are ways a property would run nothing, the failure mode AC6's own justification forbids — the trigger list was narrower than the promise), and the guard is pinned to **construction** (`InvalidArgumentException`), removing the "when invoked" ambiguity. A fourth way to run nothing — every command's precondition always failing — is a *runtime* vacuous pass, not construction-detectable; deferred to AC1 as an open question, not folded into AC6. |
 | Amended    | maurice, 2026-07-31 — `initial` is **required**, not `?Generator = null`. The sketched "omitted ⇒ `Gen::constant(null)` internally" cannot type-check: the internal `null` fed to `setup: Closure(TInitial)` is unsound for a non-null `TInitial` (PHPStan max, `argument.type`, verified). The user passes `Gen::constant(null)` explicitly for "no initial state" — "one code path" preserved, only the omit-convenience dropped. Found while building AC1 sub-step 1: the unbuildability was in the *combination* of two sketch elements (`initial`'s default × `setup`'s parameter type), which a per-class review of the sketches missed. |
 | Amended    | maurice, 2026-07-31 — AC9 narrowed: the "shrinking it approaches 1 / `origin: 0` must break it" clause is removed — its trigger is unreachable, because SPEC-002 shrinks the command list structurally and never shrinks the drawn length through the length generator, so `origin: 1` has no consumer (vestigial, kept in code with a comment). AC9 now pins only what is true and testable: the length is drawn in `[1, n]`, never zero (`min: 1`). R11's fourth "unreachable trigger" instance; it escaped approval because AC9 was transplanted from SPEC-003 AC4 and transplanted text does not re-pass the gate. |
+| Amended    | maurice, 2026-07-31 — AC10 added: a run in which no command executed across any sequence is reported `passed: false` with a `vacuous` qualification (no counterexample, no `Failure`), the runtime counterpart of AC6 — a property that verified nothing must never look like a pass, and a silent marker on a green result would be that same failure one layer up. Condition is exactly zero executed (objective, not a threshold), observed from `RunResult::$executed`; vacuous and failure are mutually exclusive (a failure requires a command to have run). Rendering the vacuous case is AC4's job; AC10 owns the verdict and the flag. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -114,6 +115,10 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
     point. The command-sequence format is already load-bearing: SPEC-002's AC7
     meta-test asserts the shrunk counterexample by its string form, so this AC pins
     the surrounding report, not the per-command rendering (SPEC-001's `__toString`).
+  - *For a **vacuous** result (AC10) there is no counterexample; `counterexampleAsString()` renders an
+    explanation instead of an empty command string — that nothing was verified, and the likely cause
+    (an alphabet whose preconditions never hold, or a model too strict). AC10 owns the verdict and the
+    flag; this AC owns turning that flag into a message.*
 
 - **AC5 — a qualified shrink is reported, not hidden**
   - Given a failure whose shrinking hit the budget or was abandoned because the
@@ -198,6 +203,31 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
     representation (R1), so a shrunk counterexample may contain zero executed commands even though
     the drawn length was ≥ 1.*
 
+- **AC10 — a run in which no command ever executed is reported as vacuous, not passed** *(amendment 2026-07-31; the runtime counterpart of AC6)*
+  - Given a property whose sequences all pass, but across **every sequence that ran** not one command
+    executed — each was skipped by a false precondition (R1) — read from each run's `RunResult::$executed`,
+    which the runner already records (nothing new is counted)
+  - When the entry point finishes
+  - Then the result reports **`passed: false`** with a **`vacuous`** qualification, and no counterexample
+    and no `Failure` (nothing failed — nothing ran). The `vacuous` flag carries the distinction:
+    `passed: false` with `vacuous: true` means "there was nothing to check", `vacuous: false` a
+    counterexample — so an empty counterexample is never mistaken for a bug in this package. A property
+    that verified nothing must never report success — the runtime counterpart of AC6's construction guard.
+    (Rendering the vacuous case in a message is AC4's `counterexampleAsString()`; AC10 owns the verdict
+    and the flag.)
+  - *Vacuous and failure are mutually exclusive, so no precedence is needed — and here is the reasoning
+    to re-check if the failure path ever changes: a postcondition runs only **after** `run()`, so a
+    postcondition failure means `run()` executed; and a `run()` that throws has itself executed. So every
+    failing sequence has run at least one command, and a run that executed nothing cannot have failed. If
+    a future change lets a sequence fail without executing a command, this exclusion breaks and the
+    precedence of `vacuous` versus a counterexample must be defined.*
+  - *The cause, for the user: this is almost always an alphabet whose preconditions never hold, or a model
+    too strict — loosen the preconditions (or the model) so commands can run. AC4's rendering surfaces
+    this; AC10 records it.*
+  - *The condition is exactly **zero** executed, not a threshold: "too few ran" is a gradual judgement the
+    tool cannot defend; zero is objective and catches the fault that matters. A single all-skipped sequence
+    stays legitimate — only a whole run in which nothing executed is vacuous.*
+
 ## API sketch
 
 Illustrative only.
@@ -227,6 +257,7 @@ final readonly class PropertyResult
         public mixed $initial = null,
         public bool $budgetExhausted = false,
         public bool $abandonedNonDeterministic = false,
+        public bool $vacuous = false,   // AC10: passed false because nothing ran, not a counterexample
     ) {}
 
     /** "initial=Png · withAgent[1],build[2]" — the one reproduction artefact: initial

@@ -314,3 +314,56 @@ it('draws every sequence length in [1, n], never zero (SPEC-005 AC9)', function 
     // `min: 0` mutant — integers(0, 1) — would draw some empty sequences, dropping the total below n.
     expect($runs->runs)->toBe(10);
 })->group('SPEC-005');
+
+// --- AC10: a run in which no command ever executed is vacuous, not passed. -------------------------
+
+/**
+ * Its precondition never holds, so it is always skipped — no command ever runs. An alphabet of only
+ * these is the classic vacuous property: n sequences that verify nothing.
+ *
+ * @implements Command<null, null, null>
+ */
+final class NeverRuns implements Command
+{
+    public function preCondition(mixed $model): bool
+    {
+        return false;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return true;
+    }
+
+    public function __toString(): string
+    {
+        return 'never';
+    }
+}
+
+it('reports a run in which no command ever executed as vacuous, not passed (SPEC-005 AC10)', function () {
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new NeverRuns)],
+        setup: fn (mixed $i): Setup => new Setup(model: null, system: null),
+        initial: Gen::constant(null),
+        runs: 5,
+    );
+
+    $result = $property->check(seed: 7);
+
+    // Every command is skipped by its false precondition, so across all sequences nothing executed.
+    // That must not look like a pass (AC6's runtime counterpart): passed false, flagged vacuous, and
+    // distinguished from a real counterexample by the flag.
+    expect($result->passed)->toBeFalse()
+        ->and($result->vacuous)->toBeTrue();
+})->group('SPEC-005');

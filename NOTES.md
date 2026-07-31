@@ -1307,3 +1307,29 @@ but AC9 was *transplanted* from SPEC-003 AC4, and transplanted text does not re-
 an approved AC into a new spec re-homes its assumptions (here, that "the length shrinks" — true nowhere
 in this architecture) without re-checking them against the new context. Worth carrying: when an AC moves
 between specs, run R11 on it again in its new home; approval in the old one does not transfer.
+
+## Step 44 — SPEC-005 AC10 (sub-step 3b): the vacuous pass, verdict not marker (2026-07-31)
+
+New AC (amendment): a run in which no command ever executed across any sequence — an alphabet whose
+preconditions never hold — is reported `passed: false` with a `vacuous` qualification, not `passed:
+true`. It is the runtime counterpart of AC6: a property that verified nothing must never look like a
+pass. The shape shifted during design: my first proposal was an AC5-style marker on a *passing*
+result, but maurice's point settled it — a marker nobody reads leaves the green check green, which is
+the same silent failure one layer up. So the verdict itself flips; the flag only distinguishes this
+`passed: false` from a real counterexample (an empty counterexample without the flag would look like a
+package bug).
+
+Observed from `RunResult::$executed` — the run layer already records it, nothing new counted. The
+condition is exactly **zero** executed, not a threshold: "too few ran" is a gradual judgement the tool
+cannot defend; zero is objective. Vacuous and failure are mutually exclusive, recorded as reasoning
+(not just a conclusion) so it can be re-checked if the failure path changes: a postcondition runs only
+after `run()`, and a throwing `run()` has itself run, so every failing sequence executed at least one
+command. Rendering the vacuous case is deferred to AC4 (it owns `counterexampleAsString`); AC10 owns
+the verdict and the flag — the R11 catch of a clause promising an artefact that doesn't exist yet.
+
+**Two mutants, both sides (maurice's point, the AC6-precedence two-sidedness).** Removing the branch
+proves something happens at zero (the AC10 test falls back to `passed: true`) but not that it stays
+quiet at non-zero — an always-`vacuous: true` implementation would survive it. So the second mutant
+forces the condition always true and confirms a normal *passing* property falls over (the sub-step-1/2
+tests assert `passed: true` and go red). One-sided mutation would have left "only fires at zero"
+unproven.
