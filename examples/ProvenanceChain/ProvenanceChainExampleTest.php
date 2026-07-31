@@ -42,10 +42,17 @@ it('keeps the AI marking intact across any chain of signings and reads', functio
         // command-alphabet generator picks uniformly with no built-in bias — as
         // fast-check does deliberately — so duplication is the intended way to weight.
         alphabet: [$sign, $sign, $read],
-        setup: fn () => new Setup(
+        // The setup takes the drawn initial value even though it is null here; `fn (mixed $initial)`
+        // rather than `fn ()` makes visible that a value is passed, instead of leaning on PHP silently
+        // dropping the argument to a zero-parameter closure.
+        setup: fn (mixed $initial) => new Setup(
             model: ProvenanceModel::unsigned(MediaType::Png),
             system: new ProvenanceSession,
         ),
+        // No drawn initial state: the model starts unsigned regardless. `initial` is required (the
+        // sketched optional default could not type-check, D012 amendment); `Gen::constant(null)` is how
+        // a property with no initial state says so.
+        initial: Gen::constant(null),
         maxLength: 4,   // a real service caps chain length hard; echo that here
         runs: 25,
     ))->check();

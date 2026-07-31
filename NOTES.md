@@ -1542,3 +1542,28 @@ offers no way to seed model and system inconsistently" is a property of the type
 bundles both; `check()` reads both from one call), which a runtime test cannot falsify. A claim that the
 API makes something *impossible* is proven by construction, not by a test that could fail; the row must
 say so, or a later reader infers a coverage that isn't there.
+
+## Step 53 — dogfood: the paid bill, and the sketch that came true (2026-07-31)
+
+Both `examples/` suites pass on the finished engine. Two findings, and they are different in kind.
+
+**ProvenanceChain needed one line — a paid bill, not drift.** It failed with `Argument #3 ($initial)
+not passed`, and the fix was `initial: Gen::constant(null)`. The distinction matters and is exactly what
+§6's "if they needed changing, the API drifted — investigate" is for: this is not the example bent to
+fit the code. The `initial`-required amendment (2026-07-31) *predicted this line as the accepted price*
+in writing — "one code path preserved, only the omit-convenience dropped; the user passes
+`Gen::constant(null)` explicitly for 'no initial state'." The dogfood then showed the price is exactly
+one line, for a property that genuinely has no initial state. A bill the design chose to pay and named
+in advance is the opposite of drift, and proving that difference is part of what the dogfood is for. (The
+closure was also made `fn (mixed $initial) =>` rather than `fn () =>`: PHP silently drops an extra
+argument to a zero-parameter arrow function, but leaning on that would hide that a value is passed.)
+
+**ImmutableBuilder passed unmodified — and that is the real §5 acceptance test.** It is not merely that
+the package works. That example was written at step 1 (ROADMAP §1), against a *sketched* API, before a
+single line of implementation existed — as a deliberately-red design artefact. It now runs on the built
+engine without one change. That is the answer to why ROADMAP step 1 exists: not "does the package work"
+but "did the API become what was designed before it was built". An example that had to be rewritten to
+pass would have meant the built API diverged from the sketch it was meant to realise; that it did not is
+the strongest signal the two-decisions-before-approval and one-AC-at-a-time discipline held all the way
+through. Writing the acceptance test before the implementation, and never touching it, is what made it
+able to make that claim.
