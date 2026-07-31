@@ -116,6 +116,15 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
   - Then every candidate is run through `setup` called with that **same** initial
     state; the value is never re-drawn per candidate, which would change the system
     under the shrinker and make the result meaningless.
+  - *Requirement (D022): the bug whose initial state is held fixed must surface
+    **through a command** — a command's postcondition (or a thrown exception) is
+    what detects the bad initial state. A failure that fires for a specific initial
+    state with **no** command cannot occur in this model: the runner checks nothing
+    at zero commands (D022), so there is no command-independent failure to find. The
+    minimal counterexample therefore always retains at least one executed command; a
+    planted case that tried to fail on the initial state alone would be the
+    empty-sequence failure in disguise, and is unreachable. The meta-test for this
+    AC (`tests/Meta/`) must plant the bug accordingly.*
 
 - **AC9 — a sequence length is drawn in `[1, n]`, never zero** *(D018; was SPEC-003 AC4)*
   - Given a maximum length *n*
