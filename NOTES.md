@@ -1489,3 +1489,30 @@ carry the distinction, but the *properties* they carry were unstated):
 
 Mutant per flag, and — unlike AC8 — they are genuinely independent: dropping `abandonedNonDeterministic`
 reddens only the abort test, dropping `budgetExhausted` only the budget test. Two flags, two defences.
+
+## Step 51 — SPEC-005 AC4: the reproduction artefact, seed auto-generation, var_export totality (2026-07-31)
+
+The last AC, cut into three commits. **4a** made `check(?int $seed = null)` and had a null seed
+auto-generate one via `random_int(0, 999_999)` — the CSPRNG, a *different* source than the package's
+own Mt19937 and unseedable by design, which is exactly why it fits choosing a seed; six digits so the
+number is short enough to retype out of a CI log (reproducibility no one retypes is none). Reported on
+every result through a required `int $seed`. Mutant: report `$seed + 1` (maurice's sharpening of my
+weaker `0`, which is itself a valid seed) — both tests redden, one on `124 ≠ 123`, one because the
+auto-seed no longer reproduces.
+
+**4b** brought `TInitial` into `PropertyResult` as the drawn initial of the *failing* run. This is the
+fifth combination-wall, and the first caught **before** building: a throwaway PHPStan-max file showed a
+bare `null` in the pass/vacuous branch widens the result to `<…, mixed>`; a `noInitial(): TInitial|null`
+helper (null via `@return`, the twin of `noCounterexample()`) binds the template. The verify-first
+finally paid for itself by catching the wall pre-code instead of post-code.
+
+**4c** is `counterexampleAsString()`: one string `seed=… · initial=… · cmd,cmd`, seed **inside** it (not
+only a field) because it is a line copied out of a CI log and pasted to a colleague — a field forces the
+reader to combine two things and someone pastes half. `var_export` renders the initial because it is
+total over PHP values, *proven* not assumed: a six-shape test (null, scalar, backed enum, pure enum,
+object without `__toString`, nested array) that a string-cast or `json_encode` would fatal on. A
+budget-limited or abandoned result carries a "not a confirmed minimum" marker **in the string** (R3):
+maurice's catch — an unshrunk sequence without the marker reads as the minimum, the exact overclaim AC5
+closed one layer down, and it has to travel with the artefact, not sit only in a flag. The spec's format
+example was illustrative, so widening it to include the seed needed no amendment, only a text update to
+keep it in step with what was built.

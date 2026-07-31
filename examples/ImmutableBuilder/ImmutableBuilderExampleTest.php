@@ -50,11 +50,11 @@ it('matches the shadow model after every step of any with* sequence', function (
             Gen::map(fn (array $a) => new WithSoftwareAgent($a['name'], $a['version']), $args),
             Gen::map(fn (array $a) => new WithClaimGenerator($a['name'], $a['version']), $args),
         ],
-        initial: Gen::elements(Format::cases()),
         setup: fn (Format $format) => new Setup(
             model: BuilderModel::initial($format),
             system: new Ref(ImmutableBuilder::for($format)),
         ),
+        initial: Gen::elements(Format::cases()),
     ))->check();
 
     expect($result->passed)->toBeTrue($result->counterexampleAsString());

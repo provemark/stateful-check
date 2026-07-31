@@ -7,8 +7,8 @@ namespace Provemark\StatefulCheck;
 /**
  * The result of a property run (SPEC-005): whether it passed, and on a failure the shrunk
  * counterexample, its `Failure`, how many candidate executions the shrink took (AC2), and the shrink
- * qualifications (AC5), and the seed the run was generated from (AC4). Grows field by field with its
- * consumers: the drawn initial state (AC4) is still to come, and brings `TInitial` with it.
+ * qualifications (AC5), the seed the run was generated from and the drawn initial state (AC4). It
+ * renders itself as one reproduction artefact through {@see counterexampleAsString()}.
  *
  * **`passed: false` has exactly four kinds, and they are mutually exclusive — one flag true, or none
  * for a clean counterexample.** A reader must be able to tell them apart, and the exclusion is a
@@ -57,4 +57,48 @@ final readonly class PropertyResult
         public bool $abandonedNonDeterministic = false,
         public mixed $initial = null,
     ) {}
+
+    /**
+     * The one reproduction artefact (AC4): a single string carrying everything needed to re-run and
+     * read the failure — the seed (so it can be regenerated), and on a failure the drawn initial state
+     * and the command sequence in readable form:
+     *
+     *     seed=123 · initial='INITIAL-STATE' · withAgent[1],build[2]
+     *
+     * It is one string on purpose. The seed alone reproduces, but a reader copying a line out of a CI
+     * log needs the initial and commands to *see* what failed; splitting them across a field and a
+     * string invites pasting half. `var_export` renders the initial because it is total over PHP values
+     * — a string cast fatals on enums and objects, `json_encode` breaks on a non-backed enum.
+     *
+     * A budget-limited or abandoned shrink appends a "not a confirmed minimum" marker (R3): an unshrunk
+     * sequence without it reads as the minimum, the overclaim AC5 exists to prevent. A vacuous run has
+     * no counterexample, so it renders why nothing was verified instead of an empty command string.
+     */
+    public function counterexampleAsString(): string
+    {
+        $seed = sprintf('seed=%d', $this->seed);
+
+        if ($this->vacuous) {
+            return $seed.' · no command ever executed: the property verified nothing. '
+                ."Likely cause: the alphabet's preconditions never held, or the model is too strict.";
+        }
+
+        if ($this->passed) {
+            return $seed.' · passed: no counterexample.';
+        }
+
+        $qualification = match (true) {
+            $this->abandonedNonDeterministic => ' · not a confirmed minimum (shrinking abandoned: system non-deterministic)',
+            $this->budgetExhausted => ' · not a confirmed minimum (shrink budget exhausted)',
+            default => '',
+        };
+
+        return sprintf(
+            '%s · initial=%s · %s%s',
+            $seed,
+            var_export($this->initial, true),
+            implode(',', array_map(static fn (Command $command): string => (string) $command, $this->counterexample)),
+            $qualification,
+        );
+    }
 }

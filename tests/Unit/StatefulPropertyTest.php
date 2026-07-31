@@ -8,6 +8,7 @@ use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Generation\Generator;
 use Provemark\StatefulCheck\Generation\Source;
 use Provemark\StatefulCheck\Outcome;
+use Provemark\StatefulCheck\PropertyResult;
 use Provemark\StatefulCheck\Setup;
 use Provemark\StatefulCheck\StatefulProperty;
 
@@ -711,3 +712,84 @@ it('reports the drawn initial state that produced the counterexample (SPEC-005 A
     expect($result->passed)->toBeFalse()
         ->and($result->initial)->toBe('INITIAL-STATE');
 })->group('SPEC-005');
+
+// --- AC4 (4c): counterexampleAsString() renders one reproducible artefact. -------------------------
+
+it('renders the seed, initial state and command sequence as one artefact (SPEC-005 AC4)', function () {
+    $result = new PropertyResult(
+        passed: false,
+        seed: 1,
+        counterexample: [new TaggedFailure(0)],
+        initial: 'INITIAL-STATE',
+    );
+
+    // One string, carrying all three: without the seed it cannot be re-run, without the initial or the
+    // commands it cannot be read. Tested together, because dropping any one defeats reproduction.
+    expect($result->counterexampleAsString())
+        ->toContain('seed=1')
+        ->toContain("initial='INITIAL-STATE'")
+        ->toContain('tf(0)');
+})->group('SPEC-005');
+
+it('renders any initial state without a fatal (SPEC-005 AC4)', function () {
+    // var_export is total over PHP values — a string-cast fatals on enums and objects, json_encode
+    // breaks on a non-backed enum — so the artefact renders whatever the initial happens to be. Proven,
+    // not assumed: one of each shape that could fatal a lesser renderer.
+    $initials = [
+        'null' => null,
+        'scalar' => 42,
+        'backed enum' => RenderSuit::Hearts,
+        'pure enum' => RenderColor::Red,
+        'object without __toString' => new stdClass,
+        'nested array' => [1, [2, 3]],
+    ];
+
+    foreach ($initials as $initial) {
+        $result = new PropertyResult(
+            passed: false,
+            seed: 7,
+            counterexample: [new TaggedFailure(0)],
+            initial: $initial,
+        );
+
+        // Reaching this assertion at all is the point: var_export did not fatal on this shape.
+        expect($result->counterexampleAsString())->toBeString()->toContain('tf(0)');
+    }
+})->group('SPEC-005');
+
+it('renders a vacuous result as an explanation, not an empty command string (SPEC-005 AC4)', function () {
+    $result = new PropertyResult(passed: false, seed: 9, vacuous: true);
+    $rendered = $result->counterexampleAsString();
+
+    expect($rendered)->toContain('seed=9')->toContain('verified nothing');
+    expect(str_contains($rendered, 'initial='))->toBeFalse();
+})->group('SPEC-005');
+
+it('renders the seed and a no-counterexample note for a passing result (SPEC-005 AC4)', function () {
+    $result = new PropertyResult(passed: true, seed: 5);
+
+    expect($result->counterexampleAsString())
+        ->toContain('seed=5')
+        ->toContain('no counterexample');
+})->group('SPEC-005');
+
+it('marks a budget-limited or abandoned counterexample as not a confirmed minimum (SPEC-005 AC4)', function () {
+    // R3: an unshrunk or budget-limited sequence without this marker reads as the minimum — the exact
+    // overclaim AC5 closed. The qualification must travel with the artefact, not sit only in a field.
+    $budget = new PropertyResult(passed: false, seed: 2, counterexample: [new TaggedFailure(0)], budgetExhausted: true);
+    $abandoned = new PropertyResult(passed: false, seed: 3, counterexample: [new TaggedFailure(0)], abandonedNonDeterministic: true);
+
+    expect($budget->counterexampleAsString())->toContain('not a confirmed minimum')
+        ->and($abandoned->counterexampleAsString())->toContain('not a confirmed minimum')
+        ->and($abandoned->counterexampleAsString())->toContain('non-deterministic');
+})->group('SPEC-005');
+
+enum RenderSuit: string
+{
+    case Hearts = 'H';
+}
+
+enum RenderColor
+{
+    case Red;
+}

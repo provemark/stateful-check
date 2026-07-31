@@ -126,11 +126,13 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
   - When it is inspected
   - Then it names the seed used — including when the seed was generated rather than
     supplied — and, on a failure, `counterexampleAsString()` produces the one
-    reproduction artefact: the drawn initial state **and** the command sequence in
-    its readable form (`initial=… · withAgent[1],build[2]`). All of it is one
-    output, tested as one — a seed with no commands, or commands with no initial
-    state, cannot reproduce the failure or even be fully read, which defeats the
-    point. The command-sequence format is already load-bearing: SPEC-002's AC7
+    reproduction artefact: the seed, the drawn initial state **and** the command
+    sequence in its readable form (`seed=123 · initial=… · withAgent[1],build[2]`).
+    The seed is inside the string, not only a field: it is one line copied out of a
+    CI log, and without it the artefact its own name promises to reproduce cannot be
+    re-run. All of it is one output, tested as one — a seed with no commands, or
+    commands with no initial state, cannot reproduce the failure or even be fully
+    read, which defeats the point. The command-sequence format is already load-bearing: SPEC-002's AC7
     meta-test asserts the shrunk counterexample by its string form, so this AC pins
     the surrounding report, not the per-command rendering (SPEC-001's `__toString`).
   - *For a **vacuous** result (AC10) there is no counterexample; `counterexampleAsString()` renders an
@@ -278,8 +280,9 @@ final readonly class PropertyResult
         public bool $vacuous = false,   // AC10: passed false because nothing ran, not a counterexample
     ) {}
 
-    /** "initial=Png · withAgent[1],build[2]" — the one reproduction artefact: initial
-     *  state and command sequence together, incomplete without either (AC4). */
+    /** "seed=123 · initial=Png · withAgent[1],build[2]" — the one reproduction artefact:
+     *  seed, initial state and command sequence together, incomplete without any (AC4). A
+     *  budget-limited or abandoned result also carries a "not a confirmed minimum" marker (R3). */
     public function counterexampleAsString(): string;
 }
 
@@ -439,14 +442,15 @@ per-command reachability check, and no one should expect one from `preCondition`
 
 Filled per AC as it is implemented — the Traceability section may change on an `approved` spec without
 re-approval. Every acceptance criterion maps to at least one test; every source file maps back to this
-spec. AC4, AC5, and AC8 remain open; the status stays `approved` until they are done.
+spec. All ten acceptance criteria are now implemented; the status flip to `implemented` follows the
+three-sided traceability check.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
 | AC1                  | `tests/Unit/StatefulPropertyTest.php` :: "runs a drawn sequence and reports success…" + "runs n sequences, each with a fresh setup and its own drawn initial" + "stops at the first failing sequence and reports failure" + "advances one seeded stream across the sequences…" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (the generate → run → report loop) |
 | AC2                  | `tests/Unit/StatefulPropertyTest.php` :: "shrinks the first failing sequence to a counterexample, with a fresh system per candidate" + "reproduces the same counterexample from the same seed…" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (the shrink wiring, the fresh-per-candidate `freshSut`); `src/PropertyResult.php` :: `$counterexample`, `$failure`, `$executions` |
 | AC3                  | `tests/Unit/StatefulPropertyTest.php` :: "reproduces the same generation from the same seed, and varies with a different one" (SPEC-005); the counterexample-reproduction half is "reproduces the same counterexample from the same seed…" (delivered with AC2) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`Source::seeded($seed)`); `src/Generation/Source.php` :: `Source::seeded` |
-| AC4                  | —                           | —                    |
+| AC4                  | `tests/Unit/StatefulPropertyTest.php` :: "reports the seed it was given" + "generates and reports a seed when none is given, and that seed reproduces" + "reports the drawn initial state that produced the counterexample" + "renders the seed, initial state and command sequence as one artefact" + "renders any initial state without a fatal" (six-type totality proof) + "renders a vacuous result as an explanation…" + "renders the seed and a no-counterexample note for a passing result" + "marks a budget-limited or abandoned counterexample as not a confirmed minimum" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`?int $seed` + `random_int` auto-seed; `$initialValue` into the result; `noInitial()` for the pass/vacuous branches); `src/PropertyResult.php` :: `$seed`, `$initial`, `TInitial`, `counterexampleAsString` (seed + initial + commands in one string, the R3 "not a confirmed minimum" marker, the vacuous explanation) |
 | AC5                  | `tests/Unit/StatefulPropertyTest.php` :: "reports an abandoned (non-deterministic) shrink as a qualification, not a clean counterexample" + "reports a budget-limited shrink as a qualification" (SPEC-005) — each mutant-proven independently (dropping either flag reddens only its own test) | `src/StatefulProperty.php` :: `StatefulProperty::check` (propagates the flags), `$budget` param (the consumer of `budgetExhausted`); `src/PropertyResult.php` :: `$budgetExhausted`, `$abandonedNonDeterministic`, and the four-way-exclusion + R3 docblock |
 | AC6                  | `tests/Unit/StatefulPropertyTest.php` :: "throws at construction when the command alphabet is empty / maximum length is below one / run count is below one" + "constructs without throwing when the configuration is valid" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::__construct` (the run-nothing guard) |
 | AC7                  | folded into AC1 (the setup conversion has no consumer without the loop); the one-consistent-setup guarantee is asserted by "runs n sequences, each with a fresh setup and its own drawn initial" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`setup($initial)` once per execution → `initialModel` + `freshSut`); `src/Setup.php` |
