@@ -295,3 +295,22 @@ it('advances one seeded stream across the sequences, so they are not all identic
     // observations above cannot see.
     expect(count(array_unique($received)))->toBeGreaterThan(1);
 })->group('SPEC-005');
+
+// --- AC9: sequence length is drawn in [1, n], never zero. -----------------------------------------
+
+it('draws every sequence length in [1, n], never zero (SPEC-005 AC9)', function () {
+    $runs = new RunCounter;
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new RecordingCommand($runs))],
+        setup: fn (mixed $i): Setup => new Setup(model: null, system: null),
+        initial: Gen::constant(null),
+        maxLength: 1,   // integers(1, 1) is always 1, so every one of the n sequences runs exactly one command
+        runs: 10,
+    );
+
+    $property->check(seed: 42);
+
+    // Every sequence has length 1 (min: 1, never 0), so exactly n commands ran across n sequences. The
+    // `min: 0` mutant — integers(0, 1) — would draw some empty sequences, dropping the total below n.
+    expect($runs->runs)->toBe(10);
+})->group('SPEC-005');

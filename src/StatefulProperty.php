@@ -58,6 +58,9 @@ final class StatefulProperty
         // different sequence and initial. Re-seeding inside the loop would draw the same sequence n
         // times.
         $source = Source::seeded($seed);
+        // `min: 1` is load-bearing (AC9: never an empty sequence). `origin: 1` has no consumer yet —
+        // the drawn length is never shrunk through this generator (SPEC-002 shrinks the command list
+        // structurally); it is the right value if length-shrinking is ever added.
         $lengths = Gen::integers(1, $this->maxLength, origin: 1);
         $commandGenerator = Gen::alphabet($this->alphabet);
 

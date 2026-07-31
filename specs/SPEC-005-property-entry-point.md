@@ -7,6 +7,7 @@
 | Approved   | maurice, 2026-07-31                               |
 | Amended    | maurice, 2026-07-31 — AC6 broadened: it now guards `runs < 1` alongside an empty alphabet and `maxLength < 1` (all three are ways a property would run nothing, the failure mode AC6's own justification forbids — the trigger list was narrower than the promise), and the guard is pinned to **construction** (`InvalidArgumentException`), removing the "when invoked" ambiguity. A fourth way to run nothing — every command's precondition always failing — is a *runtime* vacuous pass, not construction-detectable; deferred to AC1 as an open question, not folded into AC6. |
 | Amended    | maurice, 2026-07-31 — `initial` is **required**, not `?Generator = null`. The sketched "omitted ⇒ `Gen::constant(null)` internally" cannot type-check: the internal `null` fed to `setup: Closure(TInitial)` is unsound for a non-null `TInitial` (PHPStan max, `argument.type`, verified). The user passes `Gen::constant(null)` explicitly for "no initial state" — "one code path" preserved, only the omit-convenience dropped. Found while building AC1 sub-step 1: the unbuildability was in the *combination* of two sketch elements (`initial`'s default × `setup`'s parameter type), which a per-class review of the sketches missed. |
+| Amended    | maurice, 2026-07-31 — AC9 narrowed: the "shrinking it approaches 1 / `origin: 0` must break it" clause is removed — its trigger is unreachable, because SPEC-002 shrinks the command list structurally and never shrinks the drawn length through the length generator, so `origin: 1` has no consumer (vestigial, kept in code with a comment). AC9 now pins only what is true and testable: the length is drawn in `[1, n]`, never zero (`min: 1`). R11's fourth "unreachable trigger" instance; it escaped approval because AC9 was transplanted from SPEC-003 AC4 and transplanted text does not re-pass the gate. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -176,14 +177,22 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
   - Given a maximum length *n*
   - When the entry point draws a sequence
   - Then its length is drawn by `Gen::integers(1, $n, origin: 1)` — always between 1 and *n*,
-    never zero, and shrinking it approaches 1. A zero-length sequence is deliberately never
-    drawn because it has nothing to run and so nothing to fail: the runner checks nothing at
-    zero commands (D022), so an empty draw could only ever pass — a wasted run. (SPEC-002 no
-    longer probes the empty sequence either; D022 removed that candidate for the same reason.
-    This convention is why the empty case never even reaches the shrinker, D018.)
+    never zero. A zero-length sequence is deliberately never drawn because it has nothing to run
+    and so nothing to fail: the runner checks nothing at zero commands (D022), so an empty draw
+    could only ever pass — a wasted run. (SPEC-002 no longer probes the empty sequence either;
+    D022 removed that candidate for the same reason.)
   - *This is a convention, not a new generator: it is a usage of `integers`, whose behaviour AC2
-    of SPEC-003 already covers. What a test here pins is the choice `min: 1, origin: 1` — a
-    change to `[0, n]` or `origin: 0` must break it — guarding D018.*
+    of SPEC-003 already covers. What a test here pins is the choice `min: 1` — a change to `[0, n]`
+    must break it — guarding D018.*
+  - *`origin: 1` is vestigial (amendment 2026-07-31). It would matter only if the drawn length were
+    shrunk **through this generator**, but SPEC-002 shrinks the command **list** structurally
+    (dropping contiguous chunks) and never calls the length generator to reduce its value — the
+    length is never shrunk after generation. So `origin: 1` has no consumer, and the earlier
+    "shrinking it approaches 1 / `origin: 0` must break it" was a clause with an unreachable trigger
+    (the same class as the empty-candidate branch; R11's fourth instance). It escaped approval
+    because AC9 was transplanted from SPEC-003 AC4, and transplanted text does not re-pass R11. The
+    `origin: 1` argument is kept in the code with a comment: it is the right value if length-shrinking
+    is ever added.*
   - *Note (D018): "at least one" is about the **generated** length, not the number of commands in
     a counterexample. A command whose precondition fails is skipped and drops out of the shrink
     representation (R1), so a shrunk counterexample may contain zero executed commands even though

@@ -1284,3 +1284,26 @@ and asserts both `passed === false` **and** `$setups->count === 2` — the loop 
 sequence, not all n. "Stops" and "fails" are two properties (the SPEC-001 AC2 lesson); a loop that
 ran all n would still report false but leave the count at n. Building the branch without this second
 assertion would have been the `Failure::$reason`/D021 shape: correct, plausible, never verified.
+
+## Step 43 — SPEC-005 AC9 (sub-step 3a): a vestigial `origin`, and R11's fourth escape (2026-07-31)
+
+AC9 is a convention, not a generator: the length is drawn `integers(1, maxLength, origin: 1)`. The
+behaviour already existed (sub-step 1's loop), so the test is green on arrival and mutant-proven —
+`maxLength: 1` makes every one of n sequences exactly one command, so `runCounter === n`; the `min: 0`
+mutant (`integers(0, 1)`) drew 7 empty sequences of 10 (seed 42), dropping the total to 3, which the
+test catches. `min: 1` is load-bearing.
+
+**`origin: 1` is vestigial — a fourth "unreachable trigger" (R11's class).** AC9's text promised
+"shrinking it approaches 1", but `origin` only matters if the drawn length is shrunk *through this
+generator*, and it never is: SPEC-002 shrinks the command **list** structurally (dropping contiguous
+chunks) and never calls the length generator to reduce its value. So the "shrink approaches 1 /
+`origin: 0` must break it" clause had a trigger nothing can reach — the same class as the empty-candidate
+branch (D022) and `Failure::$reason`. Amended to what is true and testable (`[1, n]`, never zero);
+`origin: 1` kept in the code with a comment (no consumer now, the right value if length-shrinking ever
+comes).
+
+The escape is itself the lesson maurice named: **R11 catches unreachable-trigger clauses at approval,
+but AC9 was *transplanted* from SPEC-003 AC4, and transplanted text does not re-pass the gate.** Moving
+an approved AC into a new spec re-homes its assumptions (here, that "the length shrinks" — true nowhere
+in this architecture) without re-checking them against the new context. Worth carrying: when an AC moves
+between specs, run R11 on it again in its new home; approval in the old one does not transfer.
