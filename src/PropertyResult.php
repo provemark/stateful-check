@@ -35,6 +35,7 @@ namespace Provemark\StatefulCheck;
  *
  * @template TModel
  * @template TSut
+ * @template TInitial
  */
 final readonly class PropertyResult
 {
@@ -42,6 +43,8 @@ final readonly class PropertyResult
      * @param  list<Command<TModel, TSut, mixed>>  $counterexample  the counterexample on a failure
      *                                                              (shrunk, best-so-far, or unshrunk per the
      *                                                              flags above); empty on a pass or a vacuous run
+     * @param  TInitial|null  $initial  the drawn initial state that produced the counterexample; null on a
+     *                                  pass or a vacuous run, where no single run's initial is the answer
      */
     public function __construct(
         public bool $passed,
@@ -52,5 +55,6 @@ final readonly class PropertyResult
         public int $executions = 0,
         public bool $budgetExhausted = false,
         public bool $abandonedNonDeterministic = false,
+        public mixed $initial = null,
     ) {}
 }

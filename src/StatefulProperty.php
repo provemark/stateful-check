@@ -57,7 +57,7 @@ final class StatefulProperty
     }
 
     /**
-     * @return PropertyResult<TModel, TSut>
+     * @return PropertyResult<TModel, TSut, TInitial>
      */
     public function check(?int $seed = null): PropertyResult
     {
@@ -124,6 +124,7 @@ final class StatefulProperty
                     executions: $shrunk->executions,
                     budgetExhausted: $shrunk->budgetExhausted,
                     abandonedNonDeterministic: $shrunk->abandonedNonDeterministic,
+                    initial: $initialValue,
                 );
             }
 
@@ -135,10 +136,10 @@ final class StatefulProperty
             // preconditions): the property verified nothing. A vacuous run must not look like a pass
             // (AC10, the runtime counterpart of AC6) — report failure, flagged as vacuous so it is not
             // mistaken for a counterexample.
-            return new PropertyResult(passed: false, seed: $seed, vacuous: true, counterexample: $this->noCounterexample());
+            return new PropertyResult(passed: false, seed: $seed, vacuous: true, counterexample: $this->noCounterexample(), initial: $this->noInitial());
         }
 
-        return new PropertyResult(passed: true, seed: $seed, counterexample: $this->noCounterexample());
+        return new PropertyResult(passed: true, seed: $seed, counterexample: $this->noCounterexample(), initial: $this->noInitial());
     }
 
     /**
@@ -152,5 +153,19 @@ final class StatefulProperty
     private function noCounterexample(): array
     {
         return [];
+    }
+
+    /**
+     * A typed null initial for the pass and vacuous branches, where no single run's initial is the
+     * answer. Like {@see noCounterexample()}, a bare `null` would widen the result's TInitial to
+     * `mixed` and clash with `check()`'s return type; stating `TInitial|null` here binds it without an
+     * inline `@var`. (The verify-first check for AC4 confirmed this helper is what the third template
+     * needs — a bare `null` in these branches fails PHPStan max.)
+     *
+     * @return TInitial|null
+     */
+    private function noInitial(): mixed
+    {
+        return null;
     }
 }

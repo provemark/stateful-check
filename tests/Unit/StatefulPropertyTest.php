@@ -697,3 +697,17 @@ it('generates and reports a seed when none is given, and that seed reproduces (S
         ->and(array_map(fn (Command $c): string => (string) $c, $replay->counterexample))
         ->toBe(array_map(fn (Command $c): string => (string) $c, $auto->counterexample));
 })->group('SPEC-005');
+
+// --- AC4 (4b): the drawn initial state that produced the counterexample is reported. --------------
+
+it('reports the drawn initial state that produced the counterexample (SPEC-005 AC4)', function () {
+    $result = (new StatefulProperty(
+        alphabet: [Gen::constant(new TaggedFailure(0))],   // always fails, so the first run is the counterexample
+        setup: fn (mixed $initial): Setup => new Setup(model: null, system: null),
+        initial: Gen::constant('INITIAL-STATE'),
+        runs: 1,
+    ))->check(seed: 1);
+
+    expect($result->passed)->toBeFalse()
+        ->and($result->initial)->toBe('INITIAL-STATE');
+})->group('SPEC-005');
