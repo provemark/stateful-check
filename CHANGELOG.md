@@ -48,6 +48,14 @@ All notable changes to this project are documented here. Format follows
 
 ### Changed
 
+- SPEC-005 (property entry point) `implemented` (2026-07-31): all ten ACs built AC by AC — seed
+  ownership and auto-generation, the generate → run → shrink → report loop, the one reproduction
+  artefact `counterexampleAsString()` (`seed=… · initial=… · cmd,cmd`, with an R3 "not a confirmed
+  minimum" marker on a qualified shrink), and the vacuous verdict. At finalisation the three-sided
+  traceability check removed a vestigial scope item — the result object's unused "number of runs
+  performed", which no AC claimed and no code built, surviving only in the API sketch. Both dogfood
+  suites (`examples/`) now pass; `ImmutableBuilder` unmodified from the sketch it was written against
+  before any implementation existed.
 - SPEC-002 (sequence shrinking) implemented AC by AC; then, at the AC7 traceability check, the
   per-command argument family and the whole layer serving it were **retracted** (2026-07-31): the
   shrinker takes a bare `list<Command>`, the `$alphabet` generator param and the `GeneratedValue`

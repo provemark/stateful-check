@@ -37,10 +37,11 @@ generator; ~~D013~~ stateful layer only (stateless is out of scope, Eris the
 companion); ~~D014~~ self-contained SUT in the examples. See `DECISIONS.md` for
 each rationale.
 
-**SPEC-002 and SPEC-005 stay `draft` on purpose.** They are approved only when
-their turn comes, because they learn the most from the layers beneath them — the
-shrinker from how the generation core actually shrinks, the entry point from how
-the examples actually read. This is deliberate sequencing, not an oversight.
+**SPEC-002 and SPEC-005 were kept `draft` until their turn** — both are now
+`implemented`. They were approved last on purpose, because they learn the most from
+the layers beneath them — the shrinker from how the generation core actually shrinks,
+the entry point from how the examples actually read. The late sequencing was
+deliberate, not an oversight.
 
 ## 1. Failing dogfood examples first
 
@@ -93,8 +94,8 @@ order, since each step is used by the next:
 
 Deferred to step 3, after SPEC-001: the command-alphabet generator (AC5) — it produces
 `Command` instances, which do not exist until SPEC-001. So SPEC-003 finishes step 2 as
-`approved` with AC1–AC3 implemented and AC5 pending; it becomes `implemented` when the
-alphabet generator lands after SPEC-001. (The sequence length, once AC4 here, proved to be a
+`approved` with AC1–AC3 implemented and AC5 pending, and became `implemented` once the
+alphabet generator landed after SPEC-001. (The sequence length, once AC4 here, proved to be a
 consumer's usage of `integers(1, n, origin: 1)` rather than a generation deliverable — it moved
 to SPEC-005 AC9, where the sequence is drawn. D018.)
 
