@@ -1224,3 +1224,34 @@ Two observations worth keeping:
    property: `Setup` and `PropertyResult` are clean — they are `public readonly` value objects, so their
    fields are read externally and neither the unused-parameter nor the write-only-property rule fires. The
    defect was specific to `StatefulProperty`'s *private* config awaiting a deferred `check()`.
+
+## Step 41 — SPEC-005 AC1 sub-step 1: the skeleton, and an unbuildable sketch in a combination (2026-07-31)
+
+AC1's cut (AC9 and AC7 folded in, since neither has a consumer without the loop; AC8 stays separate —
+it needs shrinking, AC2): sub-step 1 is the skeleton — draw one sequence, convert the setup, run,
+aggregate. It brought `check(int $seed)` (required seed; auto-generation + its indivisible reporting
+are AC4), `Setup<TModel, TSut>`, a minimal `PropertyResult { public bool $passed }` (grows field by
+field), and the generics on `StatefulProperty` with their consumer. The AC7 conversion sits in the
+first executing line, per maurice's ordering correction: one `setup($initial)` call, `initialModel =
+$model`, `freshSut = fn () => $system`. The passing test uses a run-recording double so `passed` is
+not a vacuous "returned true without executing" — `$counter->runs > 0` is the independent observation.
+
+**A third unbuildable-as-sketched form (second in SPEC-005), and this one lived in a *combination*.**
+The sketch's `initial: ?Generator = null` with "omitted ⇒ `Gen::constant(null)` internally" cannot
+type-check: the internal `null` fed to `setup: Closure(TInitial)` is unsound for a non-null `TInitial`
+(PHPStan max, `argument.type`). Fix (amended): `initial` is required; the user writes
+`Gen::constant(null)` for "no initial state" — one code path preserved, only the omit-convenience gone.
+A factory method was rejected: it hides the choice the user should make and needs its own test path.
+
+The lesson maurice drew: my per-class sketch review (Step 40) checked `Setup` and `PropertyResult` in
+isolation and found them clean, but the unbuildability was in the *interaction* of two elements —
+`initial`'s default × `setup`'s parameter type. The generalizable form: verify sketch elements that
+share type parameters *in combination*, not one class at a time. It bit twice more the same day: making
+`initial` required grew the constructor, so the four committed AC6 guard tests (which constructed
+without `setup`/`initial`) hit `ArgumentCountError` before the guard — mechanically updated to supply
+the now-required args (assertions unchanged, not weakened); and the guard tests' `StubCommand` had to
+move from `Command<mixed, mixed, null>` to `Command<null, null, null>` so the alphabet's TModel/TSut
+would agree with the tests' `Setup<null, null>` (`Setup` is invariant). The remaining SPEC-005 sketch
+interaction — the full generic `PropertyResult<TModel, TSut, TInitial>` (counterexample vs the shrinker's
+`ShrinkResult.commands`, initial vs the drawn `TInitial`) — reads clean on paper but is flagged to
+verify in combination when AC2/AC4 build it, not to assume.

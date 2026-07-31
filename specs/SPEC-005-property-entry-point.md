@@ -6,6 +6,7 @@
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-31                               |
 | Amended    | maurice, 2026-07-31 — AC6 broadened: it now guards `runs < 1` alongside an empty alphabet and `maxLength < 1` (all three are ways a property would run nothing, the failure mode AC6's own justification forbids — the trigger list was narrower than the promise), and the guard is pinned to **construction** (`InvalidArgumentException`), removing the "when invoked" ambiguity. A fourth way to run nothing — every command's precondition always failing — is a *runtime* vacuous pass, not construction-detectable; deferred to AC1 as an open question, not folded into AC6. |
+| Amended    | maurice, 2026-07-31 — `initial` is **required**, not `?Generator = null`. The sketched "omitted ⇒ `Gen::constant(null)` internally" cannot type-check: the internal `null` fed to `setup: Closure(TInitial)` is unsound for a non-null `TInitial` (PHPStan max, `argument.type`, verified). The user passes `Gen::constant(null)` explicitly for "no initial state" — "one code path" preserved, only the omit-convenience dropped. Found while building AC1 sub-step 1: the unbuildability was in the *combination* of two sketch elements (`initial`'s default × `setup`'s parameter type), which a per-class review of the sketches missed. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -133,8 +134,8 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
     is stricter than a check-time one: the invalid property never exists to be run.)
 
 - **AC7 — model and system start from one consistent setup** *(D012)*
-  - Given an optional initial-state generator and a setup that builds both model
-    and system from a drawn initial state
+  - Given an initial-state generator (required — `Gen::constant(null)` for "none")
+    and a setup that builds both model and system from a drawn initial state
   - When the sequence is first run
   - Then the initial value is **drawn once per sequence**, and the initial run calls
     `setup($initial)` **once**, deriving both sides from that single call —
@@ -255,16 +256,20 @@ final class StatefulProperty
      * @param  list<Generator<Command<TModel, TSut, mixed>>>  $alphabet  heterogeneous in TResult
      *                                                                    (covariant, D019); one TModel/TSut
      * @param  Closure(TInitial): Setup<TModel, TSut>         $setup    fn($initial) => new Setup($model, $system)
-     * @param  Generator<TInitial>|null                       $initial  drawn once per sequence and passed to
-     *                                                                  $setup. Omitted ⇒ Gen::constant(null),
-     *                                                                  applied internally, so $setup always
-     *                                                                  receives a value and there is one code path.
+     * @param  Generator<TInitial>                            $initial  drawn once per sequence and passed to
+     *                                                                  $setup. Required, not omittable: passing
+     *                                                                  `Gen::constant(null)` for "no initial state"
+     *                                                                  is explicit, and a `?Generator = null` default
+     *                                                                  cannot type-check — the internal
+     *                                                                  `Gen::constant(null)` would feed `null` to
+     *                                                                  `Closure(TInitial)`, unsound for a non-null
+     *                                                                  `TInitial` (amendment 2026-07-31).
      * @return PropertyResult<TModel, TSut, TInitial>                   (via check)
      */
     public function __construct(
         private array $alphabet,
         private Closure $setup,
-        private ?Generator $initial = null,   // null ⇒ Gen::constant(null) internally
+        private Generator $initial,
         private int $maxLength = 10,
         private int $runs = 100,
     ) {}
