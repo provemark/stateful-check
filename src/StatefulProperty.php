@@ -59,8 +59,17 @@ final class StatefulProperty
     /**
      * @return PropertyResult<TModel, TSut>
      */
-    public function check(int $seed): PropertyResult
+    public function check(?int $seed = null): PropertyResult
     {
+        // A null seed means "pick one and tell me what it was", so a failure found by CI is
+        // reproducible by re-running with the reported seed. `random_int` is the cryptographically
+        // secure generator — a *different* source than the package's own Mt19937, and unseedable by
+        // design, which is exactly why it is right for choosing a seed. The range is kept to six digits
+        // so the reported number is short enough for a human to retype out of a CI log: reproducibility
+        // no one will retype is no reproducibility, and collisions are harmless here because each seed
+        // reproduces its own run.
+        $seed ??= random_int(0, 999_999);
+
         // One seeded stream for the whole check: it advances across sequences, so each run draws a
         // different sequence and initial. Re-seeding inside the loop would draw the same sequence n
         // times.
@@ -109,6 +118,7 @@ final class StatefulProperty
                 // when it is not (R3).
                 return new PropertyResult(
                     passed: false,
+                    seed: $seed,
                     counterexample: $shrunk->commands,
                     failure: $result->failure,
                     executions: $shrunk->executions,
@@ -125,10 +135,10 @@ final class StatefulProperty
             // preconditions): the property verified nothing. A vacuous run must not look like a pass
             // (AC10, the runtime counterpart of AC6) — report failure, flagged as vacuous so it is not
             // mistaken for a counterexample.
-            return new PropertyResult(passed: false, vacuous: true, counterexample: $this->noCounterexample());
+            return new PropertyResult(passed: false, seed: $seed, vacuous: true, counterexample: $this->noCounterexample());
         }
 
-        return new PropertyResult(passed: true, counterexample: $this->noCounterexample());
+        return new PropertyResult(passed: true, seed: $seed, counterexample: $this->noCounterexample());
     }
 
     /**

@@ -7,8 +7,8 @@ namespace Provemark\StatefulCheck;
 /**
  * The result of a property run (SPEC-005): whether it passed, and on a failure the shrunk
  * counterexample, its `Failure`, how many candidate executions the shrink took (AC2), and the shrink
- * qualifications (AC5). Grows field by field with its consumers: the seed and drawn initial state
- * (AC4), which also bring `TInitial`.
+ * qualifications (AC5), and the seed the run was generated from (AC4). Grows field by field with its
+ * consumers: the drawn initial state (AC4) is still to come, and brings `TInitial` with it.
  *
  * **`passed: false` has exactly four kinds, and they are mutually exclusive — one flag true, or none
  * for a clean counterexample.** A reader must be able to tell them apart, and the exclusion is a
@@ -45,6 +45,7 @@ final readonly class PropertyResult
      */
     public function __construct(
         public bool $passed,
+        public int $seed,
         public bool $vacuous = false,
         public array $counterexample = [],
         public ?Failure $failure = null,

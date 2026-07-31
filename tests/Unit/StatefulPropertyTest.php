@@ -664,3 +664,36 @@ it('reports a budget-limited shrink as a qualification (SPEC-005 AC5)', function
         ->and($result->abandonedNonDeterministic)->toBeFalse()
         ->and($result->vacuous)->toBeFalse();
 })->group('SPEC-005');
+
+// --- AC4 (4a): the seed is reported, and generated + reported when none is given. ------------------
+
+it('reports the seed it was given (SPEC-005 AC4)', function () {
+    $result = (new StatefulProperty(
+        alphabet: [Gen::constant(new StubCommand)],
+        setup: fn (mixed $initial): Setup => new Setup(model: null, system: null),
+        initial: Gen::constant(null),
+    ))->check(seed: 123);
+
+    expect($result->seed)->toBe(123);
+})->group('SPEC-005');
+
+it('generates and reports a seed when none is given, and that seed reproduces (SPEC-005 AC4)', function () {
+    $property = new StatefulProperty(
+        alphabet: [Gen::map(fn (int $n): TaggedFailure => new TaggedFailure($n), Gen::integers(0, 1_000_000))],
+        setup: fn (mixed $initial): Setup => new Setup(model: null, system: null),
+        initial: Gen::constant(null),
+        maxLength: 4,
+        runs: 1,
+    );
+
+    $auto = $property->check();   // no seed → generated
+
+    // The generated seed is reported (an un-reported auto-seed is unreproducible — the whole promise of
+    // this layer), and re-running with it reproduces the counterexample (whose drawn integer varies with
+    // the seed, so a wrong reported seed would not reproduce).
+    $replay = $property->check(seed: $auto->seed);
+
+    expect($auto->seed)->toBeInt()
+        ->and(array_map(fn (Command $c): string => (string) $c, $replay->counterexample))
+        ->toBe(array_map(fn (Command $c): string => (string) $c, $auto->counterexample));
+})->group('SPEC-005');
