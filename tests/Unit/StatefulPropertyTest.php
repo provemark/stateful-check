@@ -253,25 +253,28 @@ it('runs n sequences, each with a fresh setup and its own drawn initial (SPEC-00
 })->group('SPEC-005');
 
 it('stops at the first failing sequence and reports failure (SPEC-005 AC1)', function () {
-    $setups = new Tally;
+    $tally = new Tally;
+    $draws = new CountingGenerator;
     $property = new StatefulProperty(
-        alphabet: [Gen::constant(new FailsFromSecondSequence($setups))],
-        setup: function (mixed $initial) use ($setups): Setup {
-            $setups->count++;
+        alphabet: [Gen::constant(new FailsFromSecondSequence($tally))],
+        setup: function (mixed $initial) use ($tally): Setup {
+            $tally->count++;
 
             return new Setup(model: null, system: null);
         },
-        initial: Gen::constant(null),
+        initial: $draws,   // counts how many sequences were generated — the quantity the stop is about
         runs: 5,
     );
 
     $result = $property->check(seed: 999);
 
-    // "Fails" and "stops" are two properties (SPEC-001 AC2). The property fails (passed false) AND the
-    // loop halts at the failing sequence (the 2nd), so only 2 setups happened — not all 5. A loop that
-    // ran all 5 would still report false but leave `$setups->count === 5`, catching a missing stop.
+    // "Fails" and "stops" are two properties (SPEC-001 AC2). The property fails, AND the loop halts at
+    // the failing sequence (the 2nd): the initial generator was drawn exactly twice, not five times.
+    // The initial-DRAW count is the actual quantity the stop is about — how many sequences were
+    // generated — where a setup counter measures "how many systems were built", which the shrinker
+    // (AC2) also does, so it does not stay a clean measure of the stop as later layers are added.
     expect($result->passed)->toBeFalse()
-        ->and($setups->count)->toBe(2);
+        ->and($draws->draws)->toBe(2);
 })->group('SPEC-005');
 
 it('advances one seeded stream across the sequences, so they are not all identical (SPEC-005 AC1)', function () {
