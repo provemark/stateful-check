@@ -1432,3 +1432,31 @@ it — the section may change on an `approved` spec without re-approval, so noth
 because "a habit is the fix" is exactly the kind of thing that quietly lapses again unless the reason it
 was needed is written down: the table is the running record of what is done, and it drifted because its
 only reader (the finalisation check) was months away.
+
+## Step 49 — SPEC-005 AC8: a layer-boundary property, found by reporting the mutant instead of passing through it (2026-07-31)
+
+AC8 (shrinking holds the initial state fixed) is the first `tests/Meta/` case for SPEC-005: a planted
+initial-state-dependent bug — a command fails only when the drawn `n === 0`, surfaced through its
+postcondition (D022) — shrinks to `[check]` only if the shrinker holds the failing draw fixed. Green on
+arrival: the mechanism is the `freshSut = fn () => setup($initialValue)->system` built at AC2, which
+reuses the captured initial rather than re-drawing. maurice's caution up front — do the two observations
+(the `[check]` counterexample and the "drawn exactly once" counter) catch different things? — reasoned
+to "no" before writing and confirmed after: both fall under the one re-draw mutant. One property, three
+angles (the guard `executions > 0` falls too).
+
+**The mutant's outcome was the real finding, and only reporting it instead of passing through surfaced
+it.** A re-drawing `freshSut` does not merely produce a wrong counterexample: it makes the failing
+sequence produce two different verdicts across the shrinker's replay, so SPEC-002's own AC8
+non-determinism guard **aborts** (`executions → 0`, the counterexample becomes the original unshrunk
+sequence). That is a **layer-boundary property**: a bug in SPEC-005's wiring manifests, one layer down,
+as a *non-deterministic system* — because from the shrinker's side the two are indistinguishable. So the
+guarantee that keeps SPEC-005's shrink deterministic is largely SPEC-002's; AC8's meta-test documents
+that the held-fixed mechanism is present and correct, it does not add an independent line of defence.
+
+The consequence for a reader of the abort (maurice's point, and where it belongs): `abandonedNonDeterministic`
+has two causes the shrinker cannot tell apart — a genuinely flaky system, or a caller whose `freshSut`
+rebuilds fresh state per candidate instead of holding it fixed. That caveat now lives at the flag itself
+(`ShrinkResult::$abandonedNonDeterministic` docblock), not only here — so someone debugging a production
+abort is told to rule out their own wiring before blaming the system. The lesson under the lesson: an
+adversarial check earns its keep not only when it kills a mutant but when *how* it kills one reveals
+where a guarantee actually lives.

@@ -22,6 +22,14 @@ use Provemark\StatefulCheck\Command;
  * exists. `$executions` is then 0: the single replay is not a candidate execution (D007) and is not
  * counted.
  *
+ * A layer-boundary caveat for whoever reads this flag: it reports what the shrinker *observed* — the
+ * same sequence produced two different verdicts — not the cause. That has **two** possible causes the
+ * shrinker cannot tell apart: a genuinely flaky system under test, or a caller that rebuilt the system
+ * from **fresh** state per candidate instead of holding it fixed (e.g. an entry point whose `freshSut`
+ * re-draws its initial state each run rather than reusing the one that failed, SPEC-005 AC8). From the
+ * shrinker's side the two are indistinguishable, so a caller seeing this flag must rule out its own
+ * wiring before blaming the system.
+ *
  * @template TModel
  * @template TSut
  */
