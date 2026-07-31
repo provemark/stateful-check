@@ -330,6 +330,7 @@ final class StatefulProperty
         private Generator $initial,
         private int $maxLength = 10,
         private int $runs = 100,
+        private int $budget = 100,   // max shrink candidate executions (D007); the consumer of $budgetExhausted (AC5)
     ) {}
 
     /** @return PropertyResult<TModel, TSut, TInitial> */
@@ -446,7 +447,7 @@ spec. AC4, AC5, and AC8 remain open; the status stays `approved` until they are 
 | AC2                  | `tests/Unit/StatefulPropertyTest.php` :: "shrinks the first failing sequence to a counterexample, with a fresh system per candidate" + "reproduces the same counterexample from the same seed…" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (the shrink wiring, the fresh-per-candidate `freshSut`); `src/PropertyResult.php` :: `$counterexample`, `$failure`, `$executions` |
 | AC3                  | `tests/Unit/StatefulPropertyTest.php` :: "reproduces the same generation from the same seed, and varies with a different one" (SPEC-005); the counterexample-reproduction half is "reproduces the same counterexample from the same seed…" (delivered with AC2) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`Source::seeded($seed)`); `src/Generation/Source.php` :: `Source::seeded` |
 | AC4                  | —                           | —                    |
-| AC5                  | —                           | —                    |
+| AC5                  | `tests/Unit/StatefulPropertyTest.php` :: "reports an abandoned (non-deterministic) shrink as a qualification, not a clean counterexample" + "reports a budget-limited shrink as a qualification" (SPEC-005) — each mutant-proven independently (dropping either flag reddens only its own test) | `src/StatefulProperty.php` :: `StatefulProperty::check` (propagates the flags), `$budget` param (the consumer of `budgetExhausted`); `src/PropertyResult.php` :: `$budgetExhausted`, `$abandonedNonDeterministic`, and the four-way-exclusion + R3 docblock |
 | AC6                  | `tests/Unit/StatefulPropertyTest.php` :: "throws at construction when the command alphabet is empty / maximum length is below one / run count is below one" + "constructs without throwing when the configuration is valid" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::__construct` (the run-nothing guard) |
 | AC7                  | folded into AC1 (the setup conversion has no consumer without the loop); the one-consistent-setup guarantee is asserted by "runs n sequences, each with a fresh setup and its own drawn initial" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`setup($initial)` once per execution → `initialModel` + `freshSut`); `src/Setup.php` |
 | AC8                  | `tests/Meta/InitialStateFixedShrinkTest.php` :: "holds the drawn initial state fixed while shrinking" (groups `meta`, `SPEC-005`) — a planted initial-state bug (via a command, D022) shrinks to `[check]` only because the initial is held fixed | `src/StatefulProperty.php` :: `StatefulProperty::check` (the shrink's `freshSut = fn () => setup($initialValue)->system`, reusing the captured initial). Note: the mechanism is green on arrival (built at AC2); a re-drawing `freshSut` is caught by SPEC-002's own AC8 abort (indistinguishable from a flaky system), so this test documents the property rather than adding an independent defence |

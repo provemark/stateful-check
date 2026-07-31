@@ -1460,3 +1460,32 @@ rebuilds fresh state per candidate instead of holding it fixed. That caveat now 
 abort is told to rule out their own wiring before blaming the system. The lesson under the lesson: an
 adversarial check earns its keep not only when it kills a mutant but when *how* it kills one reveals
 where a guarantee actually lives.
+
+## Step 50 — SPEC-005 AC5: propagating the shrink qualifications, and four kinds of false (2026-07-31)
+
+`passed: false` now has four mutually exclusive kinds: a clean counterexample, a budget-limited shrink
+(`budgetExhausted`), an abandoned one (`abandonedNonDeterministic`), and a vacuous run (`vacuous`). AC2
+had wired the counterexample but **not** the two shrink flags, so an aborted shrink presented the
+*original, unshrunk* sequence with no marker — the R3 over-claim maurice flagged: a tool may claim no
+more than it verified. AC5 propagates both flags from `ShrinkResult` to `PropertyResult`.
+
+`StatefulProperty` gains a `budget` parameter, passed to the shrinker. Not speculative: `budgetExhausted`
+is a user-visible marker meaning "stopped before the minimum", and it is useless if the caller cannot
+say *where* it stops. The parameter is the flag's consumer — the "abstraction with its consumer" line,
+not against it (it also makes the flag testable at `budget: 1`).
+
+Two things maurice pushed into the docblock rather than leaving as accidents of the code (the fields
+carry the distinction, but the *properties* they carry were unstated):
+- **The four-way exclusion as reasoning, with a hook.** Exactly one flag is true (or none) — because a
+  vacuous run has no `Failure`, and abort-vs-budget split on `executions === 0` (abort is before the
+  candidate loop, budget during it). Revisit if the shrinker ever aborts *inside* the loop.
+- **R3's protected property, with the vacuous caveat.** `budgetExhausted || abandonedNonDeterministic`
+  means "not a confirmed local minimum"; trust the counterexample as minimal only when neither is set.
+  And explicitly: this question is *meaningful only when there is a counterexample* — a vacuous run has
+  none, so minimality is undefined, not true. Without that line a reader takes "vacuous" for "minimal",
+  the silent misreading the whole docblock discipline exists to prevent. No derived `isConfirmedMinimum()`
+  accessor yet — no consumer asks it programmatically; build it with its consumer if the dogfood port
+  needs it.
+
+Mutant per flag, and — unlike AC8 — they are genuinely independent: dropping `abandonedNonDeterministic`
+reddens only the abort test, dropping `budgetExhausted` only the budget test. Two flags, two defences.

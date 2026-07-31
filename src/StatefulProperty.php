@@ -15,9 +15,10 @@ use Provemark\StatefulCheck\Shrinking\SequenceShrinker;
  * The property entry point (SPEC-005): the thing a user calls to generate command sequences from a
  * seed, run them, and on failure shrink and report a counterexample.
  *
- * So far it runs a single passing sequence (AC1 sub-step 1). The run count (sub-step 2), the
- * length/vacuous-pass guarantees (sub-step 3), the failure path (AC2), and seed auto-generation +
- * reporting (AC4) arrive with their own tests.
+ * It generates and runs `runs` sequences (AC1), stops at the first failure and shrinks it (AC2),
+ * holds the drawn initial fixed while shrinking (AC8), and reports the four kinds of outcome —
+ * a clean counterexample, a budget-limited or abandoned shrink (AC5), or a vacuous run (AC10).
+ * Seed auto-generation and the full rendered report (AC4) arrive with their own tests.
  *
  * @template TModel
  * @template TSut
@@ -36,6 +37,8 @@ final class StatefulProperty
         private readonly Generator $initial,
         private readonly int $maxLength = 10,
         private readonly int $runs = 100,
+        private readonly int $budget = 100,   // max shrink candidate executions (SPEC-002 D007); the
+        // consumer of PropertyResult::$budgetExhausted (AC5)
     ) {
         // Each of these three is a static configuration under which the property would execute
         // nothing, and a property that ran nothing must never look like one that passed (AC6). Guard
@@ -94,18 +97,23 @@ final class StatefulProperty
                 // candidate inherits another's state, the R9b leak one layer up), and the model — and
                 // report the shrunk counterexample. The Failure is the run's own: the shrinker
                 // guarantees the shrunk sequence fails the same kind (D020), and it is not re-run here.
-                $shrunk = (new SequenceShrinker(new SequenceRunner))->shrink(
+                $shrunk = (new SequenceShrinker(new SequenceRunner, budget: $this->budget))->shrink(
                     $commands,
                     $result,
                     fn () => ($this->setup)($initialValue)->system,
                     $setup->model,
                 );
 
+                // Propagate the shrink's qualifications (AC5): a budget-limited or abandoned shrink must
+                // be reported as such, so the counterexample is not presented as a confirmed minimum
+                // when it is not (R3).
                 return new PropertyResult(
                     passed: false,
                     counterexample: $shrunk->commands,
                     failure: $result->failure,
                     executions: $shrunk->executions,
+                    budgetExhausted: $shrunk->budgetExhausted,
+                    abandonedNonDeterministic: $shrunk->abandonedNonDeterministic,
                 );
             }
 

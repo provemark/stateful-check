@@ -542,3 +542,125 @@ it('reproduces the same counterexample from the same seed — the wiring stays d
     expect($first)->not->toBeEmpty()          // a real counterexample, so the comparison is not [] === []
         ->and($counterexampleWith(7))->toBe($first);
 })->group('SPEC-005');
+
+// --- AC5: a qualified shrink (budget-limited or abandoned) is reported, not hidden. ----------------
+
+/** A counter shared across a command's invocations and its clones, making the command flaky. */
+final class IntCounter
+{
+    public int $n = 0;
+}
+
+/**
+ * Flaky: its postcondition fails on the first invocation and passes after, so the failing sequence's
+ * verdict flips on the shrinker's replay and SPEC-002 aborts (non-determinism). It holds shared
+ * mutable state and does not implement `__clone`, so the flakiness survives the shrinker's cloning.
+ *
+ * @implements Command<null, null, null>
+ */
+final class FlakyCheck implements Command
+{
+    public function __construct(private IntCounter $counter) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $this->counter->n++ !== 0;
+    }
+
+    public function __toString(): string
+    {
+        return 'flaky';
+    }
+}
+
+/**
+ * Increments the system counter; fails once it reaches 3, so the filtered failing sequence is long
+ * enough (three commands) that a budget of 1 interrupts the shrink mid-search.
+ *
+ * @implements Command<null, IntBox, null>
+ */
+final class IncrementFailsAtThree implements Command
+{
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        $sut->value++;
+
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $sut->value < 3;
+    }
+
+    public function __toString(): string
+    {
+        return 'inc';
+    }
+}
+
+it('reports an abandoned (non-deterministic) shrink as a qualification, not a clean counterexample (SPEC-005 AC5)', function () {
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new FlakyCheck(new IntCounter))],
+        setup: fn (mixed $initial): Setup => new Setup(model: null, system: null),
+        initial: Gen::constant(null),
+        maxLength: 3,
+        runs: 1,
+    );
+
+    $result = $property->check(seed: 1);
+
+    // The system is non-deterministic (the flaky command flips verdict on replay), so SPEC-002 aborts
+    // the shrink. That must be reported, not hidden: passed false, flagged abandoned, and exactly that
+    // one of the four false-kinds. The counterexample is the original, unshrunk (R3: not minimal).
+    expect($result->passed)->toBeFalse()
+        ->and($result->abandonedNonDeterministic)->toBeTrue()
+        ->and($result->budgetExhausted)->toBeFalse()
+        ->and($result->vacuous)->toBeFalse();
+})->group('SPEC-005');
+
+it('reports a budget-limited shrink as a qualification (SPEC-005 AC5)', function () {
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new IncrementFailsAtThree)],
+        setup: fn (mixed $initial): Setup => new Setup(model: null, system: new IntBox),
+        initial: Gen::constant(null),
+        maxLength: 5,
+        runs: 100,
+        budget: 1,
+    );
+
+    $result = $property->check(seed: 1);
+
+    // A budget of 1 stops the shrink before it confirms the minimum: passed false, flagged
+    // budget-limited, and exactly that one of the four false-kinds. The counterexample is best-so-far
+    // (R3: not a confirmed minimum).
+    expect($result->passed)->toBeFalse()
+        ->and($result->budgetExhausted)->toBeTrue()
+        ->and($result->abandonedNonDeterministic)->toBeFalse()
+        ->and($result->vacuous)->toBeFalse();
+})->group('SPEC-005');
