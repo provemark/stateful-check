@@ -436,17 +436,19 @@ per-command reachability check, and no one should expect one from `preCondition`
 
 ## Traceability
 
-Filled when status becomes `implemented`. Every acceptance criterion maps to at
-least one test; every source file maps back to this spec.
+Filled per AC as it is implemented — the Traceability section may change on an `approved` spec without
+re-approval. Every acceptance criterion maps to at least one test; every source file maps back to this
+spec. AC4, AC5, and AC8 remain open; the status stays `approved` until they are done.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
-| AC2                  | —                           | —                    |
-| AC3                  | —                           | —                    |
+| AC1                  | `tests/Unit/StatefulPropertyTest.php` :: "runs a drawn sequence and reports success…" + "runs n sequences, each with a fresh setup and its own drawn initial" + "stops at the first failing sequence and reports failure" + "advances one seeded stream across the sequences…" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (the generate → run → report loop) |
+| AC2                  | `tests/Unit/StatefulPropertyTest.php` :: "shrinks the first failing sequence to a counterexample, with a fresh system per candidate" + "reproduces the same counterexample from the same seed…" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (the shrink wiring, the fresh-per-candidate `freshSut`); `src/PropertyResult.php` :: `$counterexample`, `$failure`, `$executions` |
+| AC3                  | `tests/Unit/StatefulPropertyTest.php` :: "reproduces the same generation from the same seed, and varies with a different one" (SPEC-005); the counterexample-reproduction half is "reproduces the same counterexample from the same seed…" (delivered with AC2) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`Source::seeded($seed)`); `src/Generation/Source.php` :: `Source::seeded` |
 | AC4                  | —                           | —                    |
 | AC5                  | —                           | —                    |
-| AC6                  | —                           | —                    |
-| AC7                  | —                           | —                    |
+| AC6                  | `tests/Unit/StatefulPropertyTest.php` :: "throws at construction when the command alphabet is empty / maximum length is below one / run count is below one" + "constructs without throwing when the configuration is valid" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::__construct` (the run-nothing guard) |
+| AC7                  | folded into AC1 (the setup conversion has no consumer without the loop); the one-consistent-setup guarantee is asserted by "runs n sequences, each with a fresh setup and its own drawn initial" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`setup($initial)` once per execution → `initialModel` + `freshSut`); `src/Setup.php` |
 | AC8                  | —                           | —                    |
-| AC9                  | —                           | —                    |
+| AC9                  | `tests/Unit/StatefulPropertyTest.php` :: "draws every sequence length in [1, n], never zero" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`Gen::integers(1, $this->maxLength, origin: 1)`) |
+| AC10                 | `tests/Unit/StatefulPropertyTest.php` :: "reports a run in which no command ever executed as vacuous, not passed" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (the vacuous branch, `$anyExecuted`); `src/PropertyResult.php` :: `$vacuous` |
