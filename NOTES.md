@@ -995,3 +995,28 @@ a narrowing guard that silently passes): an assertion that **accidentally confla
 because one of them did not exist yet**. It reads as a real test and passes for the wrong reason —
 green by the absence of behaviour, not by the behaviour itself. Watch for it whenever a later step
 adds behaviour an earlier test implicitly assumed absent.
+
+## Step 33 — AC2 loop: termination, the deferred alphabet param, and a redundant restart (2026-07-31)
+
+The shrink loop (generate → run → accept-if-sameKindAs → restart → local minimum) came alive: the
+runner enters the constructor, `executions` increments per candidate run (the AC3 zero-assertion now
+guards a real counter), and AC1 is asserted structurally for the first time — the `sameKindAs`
+condition in the accept-check *is* the invariant, not an end-assertion. The drift mutant (drop
+`sameKindAs`) makes the shrinker accept a candidate that fails for a different reason and land on a
+bug we were not shrinking; it fails exactly the drift test's identity assertion.
+
+Three things recorded so a later step does not trip on them:
+
+- **Termination is not explicit.** The loop stops when no candidate still fails, which is only
+  guaranteed to terminate because every accepted candidate is strictly *shorter* — a property of the
+  structural family, not of the loop. A length-preserving family (the argument family) breaks it, so
+  the spec now forbids adding that family until AC9's budget is the safety net.
+- **The `alphabet` parameter has no consumer yet.** It was added by amendment A for the argument
+  family, deferred to AC7. Documented on `shrink` with the condition that fills it — the
+  `Outcome::$value` class (mechanism + planned consumer both exist), not the `reason` class, so it
+  will not read as an unexplained parameter at the three-sided check.
+- **The restart is currently redundant.** With prefix + last and smallest-first ordering, the first
+  accepted candidate is *provably* already a local minimum, so a single-pass mutant returns the same
+  result and does not fail Test A — the restart is covered (it runs) but not mutation-distinguished.
+  It becomes load-bearing at AC7, with a family whose first accept is not minimal. Kept now because it
+  is the correct algorithm (the resolved "restart" open question), not speculative generality.

@@ -6,26 +6,41 @@ namespace Provemark\StatefulCheck\Shrinking;
 
 use LogicException;
 use Provemark\StatefulCheck\Command;
+use Provemark\StatefulCheck\Failure;
 use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Generation\Generator;
 use Provemark\StatefulCheck\RunResult;
+use Provemark\StatefulCheck\SequenceRunner;
 
 /**
  * Shrinks a failing command sequence toward a local minimum (SPEC-002).
  *
- * For AC3 it only filters: the commands that did not execute are dropped by reading the original
- * run's `executed` record — no candidate is run to discover them (R1). The `SequenceRunner` it will
- * run candidates against, and the budget, are constructor state that arrives with AC5 and AC9 —
- * AC3 needs neither, so neither is declared yet.
+ * It first drops the commands that did not execute by reading the original run's `executed` record —
+ * no candidate is run to discover them (R1, AC3) — then reduces the rest with candidate families,
+ * running each against a fresh system and keeping any that still fails the same way (AC2). The
+ * result is a local minimum relative to those families (R3): AC2 cannot detect a family that is too
+ * weak, only AC7 (a planted bug with a known minimum) can.
  *
- * @template TModel
- * @template TSut
+ * The command types are method-level templates, as on `SequenceRunner` — the shrinker holds only a
+ * (non-generic) runner, so there is nothing to bind at construction.
  */
 final class SequenceShrinker
 {
+    public function __construct(
+        private readonly SequenceRunner $runner,
+    ) {}
+
     /**
+     * @template TModel
+     * @template TSut
+     *
      * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $failing
-     * @param  Generator<Command<TModel, TSut, mixed>>  $alphabet
+     * @param  Generator<Command<TModel, TSut, mixed>>  $alphabet  the generator, for the per-command
+     *                                                             argument family (amendment A). It has no consumer yet: that family is deferred until a
+     *                                                             planted case (AC7) needs it, and it may be added only once AC9's budget exists, because it
+     *                                                             preserves length and so escapes the structural termination argument below. This is the
+     *                                                             `Outcome::$value` class of unused-but-planned, not the `reason` class: mechanism and
+     *                                                             consumer both exist, only the wiring is deferred.
      * @param  callable(): TSut  $freshSut
      * @param  TModel  $initialModel
      * @return ShrinkResult<TModel, TSut>
@@ -43,21 +58,69 @@ final class SequenceShrinker
             ));
         }
 
-        // A counter, not a constant: candidate families (AC5 onward) increment it at each run. AC3
-        // filters by reading `executed` and runs nothing, so it stays zero — non-vacuously.
+        // The shrinker minimises a *failing* run; the AC1 invariant compares each candidate against
+        // this baseline failure, so it must exist.
+        $baseline = $original->failure ?? throw new LogicException('SequenceShrinker::shrink(): the original run did not fail.');
+
+        // A counter, not a constant: it increments per candidate run below (AC2). The filter runs
+        // nothing, so on a sequence with no structural reduction it stays zero (AC3).
         $executions = 0;
 
         // Drop the commands that did not execute (AC3): skipped by a false precondition, or never
         // reached after the failure. Both are `false` in `executed`; the shrinker does not
-        // distinguish them (RunResult documents the merge).
-        $representation = [];
+        // distinguish them (RunResult documents the merge). Keep the GeneratedValues — the loop
+        // works on them and unwraps to bare commands only for the result.
+        $current = [];
         foreach ($failing as $i => $value) {
             if ($original->executed[$i]) {
-                $representation[] = $value->value;
+                $current[] = $value;
             }
         }
 
-        return new ShrinkResult($representation, count($failing), $executions);
+        // Reduce to a local minimum (AC2). On each accepted candidate, restart generation from the
+        // reduced sequence. Termination rests on every accepted candidate being *strictly shorter*
+        // than its predecessor — a property of the structural family, not of this loop — so `$current`
+        // shrinks on every restart and the loop cannot run forever. A length-preserving family (the
+        // argument family, AC7) would break that; it may be added only once AC9's budget provides the
+        // safety net.
+        do {
+            $reduced = false;
+            foreach ($this->candidateReductions($current) as $candidate) {
+                $executions++;
+                if ($this->stillFails($candidate, $baseline, $freshSut, $initialModel)) {
+                    $current = $candidate;
+                    $reduced = true;
+                    break;
+                }
+            }
+        } while ($reduced);
+
+        return new ShrinkResult(
+            array_map(static fn (GeneratedValue $value): Command => $value->value, $current),
+            count($failing),
+            $executions,
+        );
+    }
+
+    /**
+     * Runs a candidate against a fresh system and reports whether it still fails the *same* way as
+     * the original (AC1's identity, D020): a different-kind failure is not a reproduction, so the
+     * loop never drifts toward a bug we were not shrinking. Each command is shallow-cloned out of its
+     * wrapper before the run (R9b, D021).
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $candidate
+     * @param  callable(): TSut  $freshSut
+     * @param  TModel  $initialModel
+     */
+    private function stillFails(array $candidate, Failure $baseline, callable $freshSut, mixed $initialModel): bool
+    {
+        $commands = array_map(static fn (GeneratedValue $value): Command => clone $value->value, $candidate);
+        $result = $this->runner->run($commands, $freshSut, $initialModel);
+
+        return ! $result->passed && $result->failure !== null && $result->failure->sameKindAs($baseline);
     }
 
     /**
@@ -65,7 +128,10 @@ final class SequenceShrinker
      * the last command, dropping the middle. The last command caused the failure, so removing it
      * is never a useful reduction and no candidate ever does. k runs up to `count - 2`, so the
      * full sequence (no reduction) is never yielded; a sequence of length 0 or 1 has no structural
-     * reduction and yields nothing. The per-command argument family (AC2) is added here later.
+     * reduction and yields nothing. The per-command argument family is deferred (see `shrink`).
+     *
+     * @template TModel
+     * @template TSut
      *
      * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence
      * @return iterable<list<GeneratedValue<Command<TModel, TSut, mixed>>>>

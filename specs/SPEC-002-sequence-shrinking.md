@@ -55,7 +55,9 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
      retained suffix, always keeping the last executed command;
   2. **per-command argument** — for position *i*, `alphabet->shrink(generatedValues[i])` (the
      generation core, SPEC-003), replacing that one command with each reduced value; sequence
-     length unchanged.
+     length unchanged. **This family may only be added once AC9's budget exists**: the loop's
+     termination rests on every accepted candidate being strictly *shorter* (a structural-family
+     property), and a length-preserving family escapes that argument — the budget is its safety net.
   (No empty-sequence probe: it always passes in this model, so trying it is a guaranteed-useless
   execution — removed with AC5, D022.)
 - `Failure::sameKindAs()` — the identity comparison SPEC-001 declared and deferred to its only
@@ -296,8 +298,8 @@ least one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | cross-cutting invariant (R2) — asserted in every shrinker test and proven by AC7; row lists the covering tests once they exist | the R2 postcondition, not a distinct symbol |
-| AC2                  | —                           | —                    |
+| AC1                  | cross-cutting invariant (R2) — asserted in every running shrinker test (so far "shrinks to a local minimum…", "does not drift…") and proven by AC7 | the R2 postcondition, not a distinct symbol |
+| AC2                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "shrinks to a local minimum…" + "does not drift to a candidate that fails for a different reason…" + "fails loudly when the original run did not fail" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`, `::stillFails` |
 | AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops non-executed commands by reading the record…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
 | AC4                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "every structural candidate retains the last executed command" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::candidateReductions` |
 | AC5                  | removed (D022) — the empty-sequence probe's trigger is unreachable in this model | n/a |
