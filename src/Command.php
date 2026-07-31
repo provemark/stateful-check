@@ -12,7 +12,13 @@ namespace Provemark\StatefulCheck;
  *
  * Commands must be independent (R9a): no command may consume the result of an earlier
  * command. The shrinker shallow-clones every command before each candidate; a command
- * that holds an object it must not share implements `__clone` (R9b, D006).
+ * that holds a mutable object it must not share implements `__clone` to deep-copy it
+ * (R9b, D006). A shallow clone copies scalar state but not held objects: a command that
+ * keeps mutable state in a held object and does not implement `__clone` will share that
+ * object across shrink candidates, so a mutation in one candidate leaks into the next —
+ * the exact leak the clone prevents for scalar state. Its shrink candidates then interfere,
+ * and the shrinker reports a wrong or unstable counterexample with no error. This cannot be
+ * enforced (a user cannot be made to write `__clone`); it is the command author's contract.
  *
  * Three type parameters carry the model, the system handle, and the value `run()`
  * returns (D001). A user binds them once with `@implements Command<MyModel, MySut,

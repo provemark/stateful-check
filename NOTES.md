@@ -1020,3 +1020,30 @@ Three things recorded so a later step does not trip on them:
   result and does not fail Test A — the restart is covered (it runs) but not mutation-distinguished.
   It becomes load-bearing at AC7, with a family whose first accept is not minimal. Kept now because it
   is the correct algorithm (the resolved "restart" open question), not speculative generality.
+
+## Step 34 — AC6 cloning (property, not call); an explicit AC7 gate for the restart (2026-07-31)
+
+AC6 was green on arrival — `stillFails` already shallow-clones each command (R9b, D021). The test
+proves the *property*, not the implementation: a `Check` command with its own mutable counter runs
+across several shrink candidates, records the counter it saw each time, and every record is 0 — each
+candidate got a fresh clone, no residue leaked. The clone-removal mutant makes the original `Check`
+accumulate (`$ran` reaches 3) and fails the assertion, so the property is load-bearing.
+
+Confirmed a design question the maintainer raised before I fixed the assertion: an accepted candidate
+carries the **original** `GeneratedValue`s, not the run clones — `stillFails` clones locally and
+discards, so `$current = $candidate` is originals and the returned counterexample is the pristine
+generated commands, never mutated. The test asserts `$check->ran === 0` on the original to nail this.
+
+Shallow clone is half of D021 (point 2): a command holding a mutable *object* still shares it after a
+shallow clone unless it implements `__clone`. Decided (with the maintainer): a documented author
+responsibility, not an assertion — a user cannot be forced to write `__clone`, and a test would
+exercise a made-up command, not a shrinker property. Instead the `Command` docblock now states the
+failure mode: the held object leaks across candidates and the shrinker reports a wrong or unstable
+counterexample with no error.
+
+**AC7 gate (an explicit check, not an observation).** The restart (`do/while`) is currently redundant
+— provably a no-op for prefix + last, breakable by no test. When AC7 lands, **verify it is load-
+bearing**: a family whose first accepted candidate is not a local minimum (a richer structural family
+or the argument family), against which a mutant that drops the restart fails an AC7 case. **If AC7
+does not make it load-bearing, the `do/while` is speculative code and §4 requires removing it** — keep
+a single pass. This is a required step of AC7, to be done or ticked off there, not deferred again.

@@ -335,3 +335,116 @@ it('fails loudly when the original run did not fail', function () {
         null,
     ))->toThrow(LogicException::class);
 })->group('SPEC-002');
+
+// --- AC6: cloning isolates candidates. ------------------------------------------------------------
+
+/** Records the internal counter a command saw at each run, shared across a command's clones. */
+final class CloneLog
+{
+    /** @var list<int> */
+    public array $records = [];
+
+    public function record(int $ran): void
+    {
+        $this->records[] = $ran;
+    }
+}
+
+/**
+ * Sets the counter to 1, so a following Check fails.
+ *
+ * @implements Command<null, Ref<int>, null>
+ */
+final class Setup implements Command
+{
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        $sut->value = 1;
+
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return true;
+    }
+
+    public function __toString(): string
+    {
+        return 'setup';
+    }
+}
+
+/**
+ * Carries mutable state ($ran) of its own, records it into a shared log at each run, and fails its
+ * postcondition when a Setup ran before it. If the shrinker clones it per candidate (R9b), $ran is
+ * always the pristine 0; if state leaked, it would accumulate.
+ *
+ * @implements Command<null, Ref<int>, null>
+ */
+final class Check implements Command
+{
+    public int $ran = 0;
+
+    public function __construct(private CloneLog $log) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        $this->log->record($this->ran);
+        $this->ran++;
+
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $sut->value !== 1;
+    }
+
+    public function __toString(): string
+    {
+        return 'check';
+    }
+}
+
+it('clones a command between candidates, so its mutable state does not leak (SPEC-002 AC6)', function () {
+    $log = new CloneLog;
+    $check = new Check($log);
+    $failing = [new GeneratedValue(new Setup), new GeneratedValue(new Noise), new GeneratedValue($check)];
+    // Fabricated so Check stays pristine until the shrinker clones it (a real run would mutate it).
+    $original = new RunResult(false, [true, true, true], new Failure(FailureKind::PostconditionFalse, 2, Check::class));
+
+    (new SequenceShrinker(new SequenceRunner))->shrink(
+        $failing, $original, Gen::constant(new Noise), fn (): Ref => new Ref(0), null,
+    );
+
+    // Check ran in several candidates. If each candidate cloned it (R9b), it always saw its pristine
+    // counter (0); a leak would let $ran accumulate across candidates. Non-vacuous: it ran more than
+    // once, so a leak would show. The original object is never mutated — the loop carries the
+    // original GeneratedValues, and stillFails clones locally.
+    expect(count($log->records))->toBeGreaterThan(1)
+        ->and($check->ran)->toBe(0);
+    foreach ($log->records as $ran) {
+        expect($ran)->toBe(0);
+    }
+})->group('SPEC-002');

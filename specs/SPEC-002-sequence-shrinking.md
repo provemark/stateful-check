@@ -303,7 +303,7 @@ least one test; every source file maps back to this spec.
 | AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops non-executed commands by reading the record…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
 | AC4                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "every structural candidate retains the last executed command" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::candidateReductions` |
 | AC5                  | removed (D022) — the empty-sequence probe's trigger is unreachable in this model | n/a |
-| AC6                  | —                           | —                    |
+| AC6                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "clones a command between candidates, so its mutable state does not leak" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::stillFails` |
 | AC7                  | —                           | —                    |
 | AC8                  | —                           | —                    |
 | AC9                  | —                           | —                    |
