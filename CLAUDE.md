@@ -152,6 +152,18 @@ unmerged PR.
 exact minimal sequence the shrinker returns. A shrinker that merely does not
 crash is not tested.
 
+"Shrinking behaviour" means the reduction toward a minimum: the candidate
+families (SPEC-002 AC4's structural family and the argument family) and the loop
+that applies them (AC2). That is what a planted-bug meta-test asserting an exact
+minimal sequence proves, and it is where the shrinker can silently be too weak.
+The behaviours around the reduction are not reductions to a minimum, and are
+covered by mutant-proven unit tests rather than planted-minimum meta-tests: the
+executed-subset filter is preprocessing (AC3), cloning is candidate isolation
+(AC6, R9b), the non-determinism guard is an abort path (AC8), and the budget is a
+bound (AC9). Narrowing "every shrinking behaviour" to the families-and-loop is a
+deliberate interpretation recorded here, not left to a later reader — the meta
+planted-bug case for v0.1 is the order-dependent bug (SPEC-002 AC7).
+
 **R9 — Commands are reused across shrink candidates.**
 The shrinker replays the same `Command` objects many times. Any state a command
 carries leaks between candidates and destroys reproducibility.
