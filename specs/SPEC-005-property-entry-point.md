@@ -9,6 +9,7 @@
 | Amended    | maurice, 2026-07-31 — `initial` is **required**, not `?Generator = null`. The sketched "omitted ⇒ `Gen::constant(null)` internally" cannot type-check: the internal `null` fed to `setup: Closure(TInitial)` is unsound for a non-null `TInitial` (PHPStan max, `argument.type`, verified). The user passes `Gen::constant(null)` explicitly for "no initial state" — "one code path" preserved, only the omit-convenience dropped. Found while building AC1 sub-step 1: the unbuildability was in the *combination* of two sketch elements (`initial`'s default × `setup`'s parameter type), which a per-class review of the sketches missed. |
 | Amended    | maurice, 2026-07-31 — AC9 narrowed: the "shrinking it approaches 1 / `origin: 0` must break it" clause is removed — its trigger is unreachable, because SPEC-002 shrinks the command list structurally and never shrinks the drawn length through the length generator, so `origin: 1` has no consumer (vestigial, kept in code with a comment). AC9 now pins only what is true and testable: the length is drawn in `[1, n]`, never zero (`min: 1`). R11's fourth "unreachable trigger" instance; it escaped approval because AC9 was transplanted from SPEC-003 AC4 and transplanted text does not re-pass the gate. |
 | Amended    | maurice, 2026-07-31 — AC10 added: a run in which no command executed across any sequence is reported `passed: false` with a `vacuous` qualification (no counterexample, no `Failure`), the runtime counterpart of AC6 — a property that verified nothing must never look like a pass, and a silent marker on a green result would be that same failure one layer up. Condition is exactly zero executed (objective, not a threshold), observed from `RunResult::$executed`; vacuous and failure are mutually exclusive (a failure requires a command to have run). Rendering the vacuous case is AC4's job; AC10 owns the verdict and the flag. |
+| Amended    | maurice, 2026-07-31 — AC3 split explicitly: it owns **generation** reproduction (same seed → same sequences; a different seed → different), and the "same **counterexample**" half — a found failure re-found on the same seed — is delivered at AC2 with a forward reference, so AC3 is not checked off with the most valuable half uncovered. Cross-process reproduction is stated as measured (`docs/verification/mt19937.php`), not derived, with the prior-art caveats (other PHP minors, 32-bit, non-Linux). A new requirement is recorded: the whole seed→outcome chain must stay free of non-deterministic sources (unordered iteration, time, `spl_object_id`), turning an accidental truth into a checkable one. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -99,9 +100,26 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
   AC5)*
   - Given a seed
   - When the entry point is invoked twice with that seed and the same arguments
-  - Then the same sequences are generated, the same commands execute, and the
-    same verdict and counterexample are produced — including across separate
-    processes.
+  - Then the **same sequences are generated and the same commands execute**, and a
+    *different* seed generates different sequences — so the seed genuinely threads
+    through generation, not merely a deterministic stream that ignores it.
+  - *The "same **counterexample**" half of reproduction — that a found failure is
+    re-found on the same seed — is delivered and tested at **AC2**, which builds the
+    failure path and the shrinker. AC3 owns generation reproduction; AC2 owns
+    counterexample reproduction. Recorded so AC3 is not checked off while the most
+    valuable half of reproducibility is uncovered (the same one-AC-one-deliverable
+    split as AC10's rendering → AC4).*
+  - *Across separate processes: **measured, not derived** — `docs/verification/mt19937.php`
+    runs the seeded engine in independent processes and confirms identical output. Still
+    unverified, and honestly so (prior-art): other PHP minor versions, 32-bit builds,
+    non-Linux platforms — 32-bit is the plausible edge (`PHP_INT_SIZE` affects range
+    mapping). Re-run the script if the package ever claims support beyond 64-bit Linux. A
+    subprocess test here would only re-measure a property of the PRNG.*
+  - *Requirement — the whole chain must stay deterministic, not just the generator.
+    `check(seed)` reproduces only if everything between the seed and the outcome is free of
+    non-deterministic sources: no iteration over unordered structures, no wall-clock time,
+    no `spl_object_id`/identity-hash ordering. True today, but a property of the loop that
+    was nowhere required; stating it turns an accidental truth into a checkable one.*
 
 - **AC4 — the result renders a complete, reproducible failure report**
   - Given any result, passing or failing

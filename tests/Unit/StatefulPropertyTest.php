@@ -367,3 +367,30 @@ it('reports a run in which no command ever executed as vacuous, not passed (SPEC
     expect($result->passed)->toBeFalse()
         ->and($result->vacuous)->toBeTrue();
 })->group('SPEC-005');
+
+// --- AC3: the same seed reproduces the generation; a different seed varies it. --------------------
+
+it('reproduces the same generation from the same seed, and varies with a different one (SPEC-005 AC3)', function () {
+    $drawnWith = function (int $seed): array {
+        $received = [];
+        (new StatefulProperty(
+            alphabet: [Gen::constant(new StubCommand)],
+            setup: function (mixed $initial) use (&$received): Setup {
+                $received[] = $initial;
+
+                return new Setup(model: null, system: null);
+            },
+            initial: Gen::integers(0, 1_000_000),
+            runs: 5,
+        ))->check(seed: $seed);
+
+        return $received;
+    };
+
+    // Same seed threads the same seeded stream through generation → identical draws. A different seed
+    // varies them, so the seed genuinely reaches the generator rather than a stream that ignores it.
+    // The second assertion is the mutation catch: a seed-ignoring but deterministic impl survives
+    // "same → same" but not "different → different".
+    expect($drawnWith(1))->toBe($drawnWith(1))
+        ->and($drawnWith(1))->not->toBe($drawnWith(2));
+})->group('SPEC-005');

@@ -1333,3 +1333,28 @@ quiet at non-zero — an always-`vacuous: true` implementation would survive it.
 forces the condition always true and confirms a normal *passing* property falls over (the sub-step-1/2
 tests assert `passed: true` and go red). One-sided mutation would have left "only fires at zero"
 unproven.
+
+## Step 45 — SPEC-005 AC3: reproduce generation before AC2 leans on it (2026-07-31)
+
+Determinism comes before the failure path: debugging a shrinker on a loop not shown to reproduce is
+the wrong order (maurice). AC3's behaviour already existed (the loop threads `Source::seeded($seed)`),
+so the test is green on arrival and mutant-proven. Two-sided, like AC10: `$drawnWith(1) === $drawnWith(1)`
+(same seed reproduces) **and** `$drawnWith(1) !== $drawnWith(2)` (a different seed varies). Only the
+second catches a seed-ignoring but deterministic impl — the `Source::seeded(0)` mutant survives "same →
+same" but breaks "different → different".
+
+**AC3 split, so it is not checked off with the best half uncovered.** Its transplanted text (from
+SPEC-001 AC5) promised "the same verdict **and counterexample**", but the counterexample does not exist
+until AC2. Amended: AC3 owns *generation* reproduction; the "a found failure is re-found on the same
+seed" half is delivered at AC2 with a forward reference — the one-AC-one-deliverable split, same shape
+as AC10's rendering → AC4. (Another transplanted AC needing re-examination in its new home; cf. AC9.)
+
+Two things recorded in the same motion (maurice):
+- **Cross-process is measured, not derived.** `docs/verification/mt19937.php` runs the seeded engine in
+  independent processes; the stronger formulation is "checked", not "follows from Mt19937". The honest
+  caveats stay (prior-art): other PHP minors, 32-bit, non-Linux unverified — re-run if support is ever
+  claimed beyond 64-bit Linux. A subprocess test would only re-measure a PRNG property.
+- **A new requirement: the whole chain must stay deterministic, not just the generator.** `check(seed)`
+  reproduces only if nothing between seed and outcome introduces non-determinism — no unordered
+  iteration, no wall-clock time, no `spl_object_id` ordering. True today but nowhere required; stating it
+  makes an accidental truth checkable, and the place a future non-deterministic addition would be caught.
