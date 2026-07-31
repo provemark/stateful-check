@@ -1567,3 +1567,26 @@ pass would have meant the built API diverged from the sketch it was meant to rea
 the strongest signal the two-decisions-before-approval and one-AC-at-a-time discipline held all the way
 through. Writing the acceptance test before the implementation, and never touching it, is what made it
 able to make that claim.
+
+## Step 54 — README: the last stale sketch, closing ROADMAP §6 (2026-07-31)
+
+The README was written before any implementation and never saw the amendments — the last stale sketch.
+Treated as one: not only the limitations list but the promises above it. Two untruths above the fold:
+the status blurb still said "implementation is not [written]"; and the headline code example called
+`StatefulProperty` **without `initial:`** — it would raise the exact `ArgumentCountError` the
+ProvenanceChain dogfood hit, a broken first impression. Replaced with a bank-ledger example whose
+initial state (the opening balance) is genuinely *drawn* — chosen over the trivial `Gen::constant(null)`
+form deliberately: showing a generated initial demonstrates what the tool does (test across a space of
+starting states, the point of D012), not merely how it is called.
+
+The example was **run by hand once against the real engine** before going in (`PASS seed=339296`), not
+just read for plausibility. That is the discipline the session has repeatedly needed: "reads correct"
+and "runs" diverge, and a README snippet that does not compile is the same class of error as the missing
+`initial:`, only newer and more visible.
+
+Two limitations added, both only expressible clearly now that the building revealed them: **no argument
+shrinking** (sequences shrink, values within a command do not — retracted in SPEC-002 when no planted
+case needed it) and **command choice is not shrunk** (a counterexample may hold a complex command where
+a simpler one would also fail — the SPEC-003 AC5 gap, the kind of thing a user mistakes for a bug in the
+package). With the README honest, ROADMAP §6 is closed: both dogfood suites pass, all v0.1 specs are
+`implemented`, and the limitations match what was built.
