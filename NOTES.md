@@ -1516,3 +1516,29 @@ maurice's catch — an unshrunk sequence without the marker reads as the minimum
 closed one layer down, and it has to travel with the artefact, not sit only in a flag. The spec's format
 example was illustrative, so widening it to include the seed needed no amendment, only a text update to
 keep it in step with what was built.
+
+## Step 52 — SPEC-005 finalisation: the three-sided check, a fourth gap-variant, AC7 by construction (2026-07-31)
+
+SPEC-005 → `implemented`. The three-sided traceability check (every AC a test, every deliverable an AC,
+every scope item a deliverable) ran at finalisation and closed on two sides immediately — but **Side C
+caught a gap nothing else did**: the scope promised a result object carrying "the number of runs
+performed", and no AC ever claimed it, no code ever built it. It survived only in the API sketch as
+`public int $runs`, invisible for months precisely because the sketch still showed it — a scope promise
+that fell silent. Dropped as vestigial (it differs from the configured `runs` only on an early stop,
+where the counterexample is already in hand; no consumer; the dogfood suites don't ask for it), with the
+asymmetry as the tie-breaker: it can return later *with* a consumer, whereas an unused public field
+cannot be removed without a breaking change.
+
+This is a **fourth gap-variant** beyond the three the check had already caught (SPEC-002 and SPEC-003
+finds). Not an unreachable trigger (R11 (b)), not an unbacked promise (R11 (a)), not a transplant that
+skipped re-approval — a scope item that no AC picked up, kept alive by an illustrative sketch that
+outlived the design. The lesson: a stale sketch is not harmless documentation drift; it is where a
+dropped promise hides from every side but the scope↔deliverable one.
+
+Second finalisation lesson, on AC7. Its traceability row pointed at AC1's and AC8's tests as if they
+were its own. Rewritten to say plainly: **no dedicated test; coverage spread over AC1 (setup once per
+sequence) and AC8 (held fixed), plus a by-construction shape guarantee** for its core claim — "the API
+offers no way to seed model and system inconsistently" is a property of the type signature (`Setup`
+bundles both; `check()` reads both from one call), which a runtime test cannot falsify. A claim that the
+API makes something *impossible* is proven by construction, not by a test that could fail; the row must
+say so, or a later reader infers a coverage that isn't there.

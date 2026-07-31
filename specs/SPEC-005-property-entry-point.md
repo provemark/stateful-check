@@ -2,7 +2,7 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | approved                                          |
+| Status     | implemented                                       |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-31                               |
 | Amended    | maurice, 2026-07-31 — AC6 broadened: it now guards `runs < 1` alongside an empty alphabet and `maxLength < 1` (all three are ways a property would run nothing, the failure mode AC6's own justification forbids — the trigger list was narrower than the promise), and the guard is pinned to **construction** (`InvalidArgumentException`), removing the "when invoked" ambiguity. A fourth way to run nothing — every command's precondition always failing — is a *runtime* vacuous pass, not construction-detectable; deferred to AC1 as an open question, not folded into AC6. |
@@ -10,6 +10,7 @@
 | Amended    | maurice, 2026-07-31 — AC9 narrowed: the "shrinking it approaches 1 / `origin: 0` must break it" clause is removed — its trigger is unreachable, because SPEC-002 shrinks the command list structurally and never shrinks the drawn length through the length generator, so `origin: 1` has no consumer (vestigial, kept in code with a comment). AC9 now pins only what is true and testable: the length is drawn in `[1, n]`, never zero (`min: 1`). R11's fourth "unreachable trigger" instance; it escaped approval because AC9 was transplanted from SPEC-003 AC4 and transplanted text does not re-pass the gate. |
 | Amended    | maurice, 2026-07-31 — AC10 added: a run in which no command executed across any sequence is reported `passed: false` with a `vacuous` qualification (no counterexample, no `Failure`), the runtime counterpart of AC6 — a property that verified nothing must never look like a pass, and a silent marker on a green result would be that same failure one layer up. Condition is exactly zero executed (objective, not a threshold), observed from `RunResult::$executed`; vacuous and failure are mutually exclusive (a failure requires a command to have run). Rendering the vacuous case is AC4's job; AC10 owns the verdict and the flag. |
 | Amended    | maurice, 2026-07-31 — AC3 split explicitly: it owns **generation** reproduction (same seed → same sequences; a different seed → different), and the "same **counterexample**" half — a found failure re-found on the same seed — is delivered at AC2 with a forward reference, so AC3 is not checked off with the most valuable half uncovered. Cross-process reproduction is stated as measured (`docs/verification/mt19937.php`), not derived, with the prior-art caveats (other PHP minors, 32-bit, non-Linux). A new requirement is recorded: the whole seed→outcome chain must stay free of non-deterministic sources (unordered iteration, time, `spl_object_id`), turning an accidental truth into a checkable one. |
+| Amended    | maurice, 2026-07-31 — scope trimmed: the result object's *"number of runs performed"* is removed from the in-scope deliverables. No AC ever required it and no code delivered it — it survived only in the API sketch (`public int $runs`), a scope promise that fell silent because nothing claimed it. This is the three-sided check's Side C catch at finalisation, and a fourth gap-variant beyond the catalogued three: not an unreachable trigger or an unbacked promise, but a scope item that no AC picked up, invisible for months because the sketch still showed it. Grounds for dropping rather than building: it differs from the configured `runs` only on an early stop, where the counterexample is already in hand; there is no consumer, and the dogfood suites (§5) do not ask for it. The asymmetry settles the doubt — it can return later *with* a consumer, whereas an unused field in a public result object cannot be removed without a breaking change. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -61,9 +62,9 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
   which consumes rather than rediscovers it (AC2).
 - Deterministic reproduction from a seed, end to end (this is where SPEC-001's
   former AC5 lives).
-- A result object carrying pass/fail, the seed used, the number of runs
-  performed, and on failure the shrunk counterexample, its `Failure`, and the
-  initial state drawn for it.
+- A result object carrying pass/fail, the seed used, and on failure the shrunk
+  counterexample, its `Failure`, and the initial state drawn for it. (The "number
+  of runs performed" was dropped as vestigial — see the 2026-07-31 amendment.)
 - Rendering a counterexample as a readable string, e.g. `inc[1],check[1]`.
 - Reporting, not throwing, when shrinking was budget-limited (SPEC-002 AC9) or
   abandoned for non-determinism (SPEC-002 AC8) — those are qualifications on the
@@ -271,7 +272,6 @@ final readonly class PropertyResult
     public function __construct(
         public bool $passed,
         public int $seed,
-        public int $runs,
         public array $counterexample = [],
         public ?Failure $failure = null,
         public mixed $initial = null,
@@ -442,8 +442,9 @@ per-command reachability check, and no one should expect one from `preCondition`
 
 Filled per AC as it is implemented — the Traceability section may change on an `approved` spec without
 re-approval. Every acceptance criterion maps to at least one test; every source file maps back to this
-spec. All ten acceptance criteria are now implemented; the status flip to `implemented` follows the
-three-sided traceability check.
+spec. All ten acceptance criteria are implemented, and the three-sided traceability check closed on
+2026-07-31 (its Side C caught a vestigial scope item, "number of runs performed", now removed — see the
+amendment), so the status is `implemented`.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
@@ -453,7 +454,7 @@ three-sided traceability check.
 | AC4                  | `tests/Unit/StatefulPropertyTest.php` :: "reports the seed it was given" + "generates and reports a seed when none is given, and that seed reproduces" + "reports the drawn initial state that produced the counterexample" + "renders the seed, initial state and command sequence as one artefact" + "renders any initial state without a fatal" (six-type totality proof) + "renders a vacuous result as an explanation…" + "renders the seed and a no-counterexample note for a passing result" + "marks a budget-limited or abandoned counterexample as not a confirmed minimum" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`?int $seed` + `random_int` auto-seed; `$initialValue` into the result; `noInitial()` for the pass/vacuous branches); `src/PropertyResult.php` :: `$seed`, `$initial`, `TInitial`, `counterexampleAsString` (seed + initial + commands in one string, the R3 "not a confirmed minimum" marker, the vacuous explanation) |
 | AC5                  | `tests/Unit/StatefulPropertyTest.php` :: "reports an abandoned (non-deterministic) shrink as a qualification, not a clean counterexample" + "reports a budget-limited shrink as a qualification" (SPEC-005) — each mutant-proven independently (dropping either flag reddens only its own test) | `src/StatefulProperty.php` :: `StatefulProperty::check` (propagates the flags), `$budget` param (the consumer of `budgetExhausted`); `src/PropertyResult.php` :: `$budgetExhausted`, `$abandonedNonDeterministic`, and the four-way-exclusion + R3 docblock |
 | AC6                  | `tests/Unit/StatefulPropertyTest.php` :: "throws at construction when the command alphabet is empty / maximum length is below one / run count is below one" + "constructs without throwing when the configuration is valid" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::__construct` (the run-nothing guard) |
-| AC7                  | folded into AC1 (the setup conversion has no consumer without the loop); the one-consistent-setup guarantee is asserted by "runs n sequences, each with a fresh setup and its own drawn initial" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`setup($initial)` once per execution → `initialModel` + `freshSut`); `src/Setup.php` |
+| AC7                  | **No dedicated test; coverage is spread, and one part is by construction — stated plainly so no reader infers a test that isn't there.** (i) "setup called once per sequence, fresh each run" is asserted by AC1's "runs n sequences, each with a fresh setup and its own drawn initial" (`$setups->count === 5`). (ii) "model **and** system derive from that one call" is a **by-construction shape guarantee, not a test**: `Setup` bundles both and `check()` reads `$setup->model` and `$setup->system` from a single `($this->setup)(...)` call, so the API offers no way to seed them inconsistently — AC7's actual claim ("no way to seed model and system inconsistently") is a property of the type signature, which a runtime test cannot falsify. (iii) "held fixed / re-called per candidate" is AC8's meta-test. | `src/StatefulProperty.php` :: `StatefulProperty::check` (`setup($initial)` once per execution → `initialModel` + `freshSut`); `src/Setup.php` (the type that bundles model + system, making inconsistency unconstructable) |
 | AC8                  | `tests/Meta/InitialStateFixedShrinkTest.php` :: "holds the drawn initial state fixed while shrinking" (groups `meta`, `SPEC-005`) — a planted initial-state bug (via a command, D022) shrinks to `[check]` only because the initial is held fixed | `src/StatefulProperty.php` :: `StatefulProperty::check` (the shrink's `freshSut = fn () => setup($initialValue)->system`, reusing the captured initial). Note: the mechanism is green on arrival (built at AC2); a re-drawing `freshSut` is caught by SPEC-002's own AC8 abort (indistinguishable from a flaky system), so this test documents the property rather than adding an independent defence |
 | AC9                  | `tests/Unit/StatefulPropertyTest.php` :: "draws every sequence length in [1, n], never zero" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (`Gen::integers(1, $this->maxLength, origin: 1)`) |
 | AC10                 | `tests/Unit/StatefulPropertyTest.php` :: "reports a run in which no command ever executed as vacuous, not passed" (SPEC-005) | `src/StatefulProperty.php` :: `StatefulProperty::check` (the vacuous branch, `$anyExecuted`); `src/PropertyResult.php` :: `$vacuous` |
