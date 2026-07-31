@@ -1419,3 +1419,16 @@ someone introduces a non-deterministic source in `check()`, and the drawn intege
 counterexample (`TaggedFailure`, whose argument SPEC-002 does not shrink) makes any re-draw visible. Its
 strength is derived — resting on AC3 and SPEC-002 — and it is labelled so in the test: not a weak test
 with an excuse, but a test with a precisely delimited task.
+
+## Step 48 — Why the SPEC-005 traceability table drifted empty (2026-07-31)
+
+Caught by maurice, not by a gate: the SPEC-005 Traceability rows sat empty through AC1, AC2, AC3, AC6,
+AC7, AC9, AC10, while at SPEC-002 they were filled per AC. Nothing failed over it, and that is the
+point — no gate watches an empty traceability table. `composer check` does not read the spec; the
+three-sided completeness check (every AC a test, every deliverable an AC, every scope item a deliverable)
+runs only at `implemented`, so between `approved` and `implemented` the table can sit blank for the whole
+build. The fix is a habit, not a gate: fill the AC's Traceability row in the same commit that implements
+it — the section may change on an `approved` spec without re-approval, so nothing blocks it. Recorded
+because "a habit is the fix" is exactly the kind of thing that quietly lapses again unless the reason it
+was needed is written down: the table is the running record of what is done, and it drifted because its
+only reader (the finalisation check) was months away.
