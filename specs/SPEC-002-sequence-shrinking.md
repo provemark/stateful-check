@@ -8,6 +8,7 @@
 | Amended    | maurice, 2026-07-30 — AC5 (empty-sequence probe) removed, D022. The empty sequence cannot fail in this model — the runner checks nothing at zero commands — so the probe is a guaranteed-useless execution and its "empty counterexample" branch is dead; the question it asked is answered by construction (the shrinker only receives a failing `RunResult`). The candidate families drop from three to two (structural, argument), the meta case is removed, and `shrunkOnce` goes with it (its only purpose was trying the probe once). |
 | Amended    | maurice, 2026-07-30 — `SequenceShrinker::shrink()` takes the original failing `RunResult`. It makes the shrinker a consumer of what already happened, not a rediscoverer: `$original->executed` filters non-executed commands with **zero** candidate runs (AC3), the execution path is AC8's replay baseline, and `$original->failure` is the `sameKindAs` baseline for the AC1 invariant. `count($original->executed)` must equal `count($failing)` (the same run) or `shrink()` throws a `LogicException` — a length mismatch would filter wrong positions and silently return a wrong counterexample. |
 | Amended    | maurice, 2026-07-31 — AC8 broadened from an execution-path mismatch to **path *or* verdict** divergence. The guard replays the failing sequence once anyway, so also comparing the verdict (does it still fail the same kind?) is free and strictly stronger: it catches a system that reproduces the same path but flips the outcome (e.g. a postcondition that passes on replay). This is the one exception to the AC1 invariant, recorded on AC1's traceability row: an abandoned, non-deterministic result is flagged unreliable and is not asserted to still fail. The replay is not a candidate execution (D007) and does not count toward the budget or `executions`. |
+| Amended    | maurice, 2026-07-31 — **retraction: the per-command argument family and the whole layer serving it are removed from v0.1.** The shrinker now takes a bare `list<Command>`; the earlier amendments adding the `$alphabet` generator param and the `GeneratedValue` wrapper input are withdrawn, and D021 (the wrapper's command/context pairing) is retracted. No v0.1 case needs argument shrinking — the AC7 meta-suite plants an argument-free bug — so carrying the layer was speculative generality (§4). The AC7 traceability check surfaced that D021's "new wrapper" was never even implemented (`replay()` runs bare clones). A later spec re-adds argument shrinking with its consumer. Same shape as D010 (`fork()`). |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -42,36 +43,23 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
 
 **In scope**
 
-- The shrinker operates on the **generated** sequence — a `list<GeneratedValue<Command>>`,
-  each command paired with the shrink context the alphabet generator recorded — **and the
-  alphabet generator itself**, which family 3 calls to reduce a command's arguments. `shrink()`
-  is a method on the generator (Step 12) and the context is opaque, so reducing command *i*'s
-  argument requires `alphabet->shrink(generatedValues[i])`; the generator is therefore a second
-  argument of the shrinker, not an implementation detail.
+- The shrinker operates on the failing command sequence — a bare `list<Command>`. (v0.1 does not
+  carry the generation context into the shrinker: argument shrinking is out of scope, so there is
+  no consumer for it — see "Out of scope" and the retraction amendment. The `$alphabet` generator
+  and the `GeneratedValue` wrapper this bullet once described went with it.)
 - Filtering that sequence to the commands that actually executed, from the execution record
   (SPEC-001 AC4). Both meanings of a false position — precondition-skipped (AC3) and never-reached
   after the failure — drop out identically; the shrinker does not distinguish them.
-- Candidate generation in two families, in this order:
-  1. **structural** — hold a prefix of length *k*, shrink the length of the
-     retained suffix, always keeping the last executed command;
-  2. **per-command argument** — for position *i*, `alphabet->shrink(generatedValues[i])` (the
-     generation core, SPEC-003), replacing that one command with each reduced value; sequence
-     length unchanged. **This family may only be added once AC9's budget exists** (now satisfied,
-     since AC9 is implemented): the loop's termination rests on every accepted candidate being
-     strictly *shorter* (a structural-family property), and a length-preserving family escapes that
-     argument — the budget is its safety net.
-  (No empty-sequence probe: it always passes in this model, so trying it is a guaranteed-useless
-  execution — removed with AC5, D022.)
+- Candidate generation, one family: **structural** — hold a prefix of length *k*, shrink the length
+  of the retained suffix, always keeping the last executed command. (No empty-sequence probe: it
+  always passes in this model, so trying it is a guaranteed-useless execution — removed with AC5,
+  D022. No per-command argument family: deferred out of scope, below.)
 - `Failure::sameKindAs()` — the identity comparison SPEC-001 declared and deferred to its only
   consumer. It is built here, with D020's exact-class semantics (a subclass is a different kind).
 - Lazy candidate generation: candidates are produced on demand, not materialised.
-- Cloning every command before running a candidate (R9b, D021). With `GeneratedValue<Command>`, a
-  candidate is run by producing, per position, a **new wrapper carrying a shallow clone of the
-  command and the same, unchanged context** — the context is shrink data, never executed, so it is
-  never cloned. The command and context are one matched pair from a single `generate()`; the
-  command is authoritative (it is what runs), and the shrinker never re-pairs a command with a
-  foreign context — a mismatch would silently yield candidates that reduce a different command
-  (D021's guard, a unit test).
+- Cloning every command before running a candidate (R9b): a candidate is run by shallow-cloning each
+  command (plain `clone`) so mutable command state cannot leak between candidates (D006). A command
+  holding a mutable object it must not share declares `__clone` (R9b).
 - Recording an execution path and detecting divergence on replay as the
   non-determinism signal (R4).
 - A budget (maximum candidate executions) so shrinking terminates on expensive
@@ -83,9 +71,15 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
   If symbolic results are ever introduced, this returns and the whole strategy
   must be re-specced.
 - Global minimisation, exhaustive search, or any claim beyond a local minimum.
+- **Per-command argument shrinking** (the former family 2, retracted 2026-07-31). Reducing a
+  command's generated arguments needs the generation context threaded into the shrinker (the
+  `GeneratedValue` wrapper and the `$alphabet` generator); no v0.1 case requires it — the meta-suite
+  (AC7) plants an argument-free order-dependent bug — so building it now would be speculative
+  generality (§4). A later spec adds it together with its consumer: the wrapper input, the generator
+  argument, and a fresh matched-pair invariant (the retracted D021).
 - Shrinking across parallel or scheduled interleavings (R5).
-- Re-ordering commands as a reduction step. Deletion and argument reduction only;
-  re-ordering changes semantics in ways the model may not catch.
+- Re-ordering commands as a reduction step. Deletion only; re-ordering changes semantics in ways
+  the model may not catch.
 - Simplifying the branch **choice** — replacing a command with a different, simpler alphabet
   entry. The choice is shrunk by no layer: this is SPEC-003 AC5's documented coverage gap, and
   SPEC-002 is where a reader looks for it. A counterexample may keep a more complex command where
@@ -135,9 +129,8 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
   which can only fail through a command's postcondition or exception. The number is a redirect, not
   renumbered. The probe returns if invariants are ever checked before the first command (D022).
 
-- **AC6 — commands are cloned between candidates** *(R9b, D006, D021)*
-  - Given any command — every command is shallow-cloned out of its `GeneratedValue`
-    wrapper before a candidate runs (a new wrapper, cloned command, same context, D021); a
+- **AC6 — commands are cloned between candidates** *(R9b, D006)*
+  - Given any command — every command is shallow-cloned (plain `clone`) before a candidate runs; a
     command carrying mutable state is what makes the cloning observable
   - When it appears in two successive candidates
   - Then the second candidate receives a fresh clone, and no state from the first
@@ -188,8 +181,9 @@ Illustrative only.
 
 The types carry `@template TModel, TSut` — the sequence is `list<Command<TModel, TSut, mixed>>`,
 and a concrete model or system type does not type-check against a bare `list<Command>` (`TModel`
-is invariant; this was the SPEC-001 `SequenceRunner` fix). The failing sequence arrives as
-`GeneratedValue`s so family 3 can shrink arguments; the runner is handed bare, cloned commands.
+is invariant; this was the SPEC-001 `SequenceRunner` fix). The failing sequence arrives as bare
+`Command`s: v0.1 shrinks structurally only, so it needs no generation context (the `GeneratedValue`
+wrapper and `$alphabet` generator were retracted, 2026-07-31).
 
 ```php
 // namespace Provemark\StatefulCheck\Shrinking;
@@ -225,8 +219,8 @@ final class SequenceShrinker
     ) {}
 
     /**
-     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $failing   the generated sequence, with contexts
-     * @param  RunResult                                           $original  the failing run SPEC-005 already produced;
+     * @param  list<Command<TModel, TSut, mixed>>  $failing   the failing sequence
+     * @param  RunResult                           $original  the failing run SPEC-005 already produced;
      *   it supplies three things and makes the shrinker a consumer of what happened rather than a
      *   rediscoverer of it: `executed` filters non-executed commands with no candidate run (AC3),
      *   the execution path is the baseline AC8 replays against, and `Failure` is the `sameKindAs`
@@ -234,41 +228,35 @@ final class SequenceShrinker
      *   must equal `count($failing)` — they must be the same run — or `shrink()` throws a
      *   `LogicException`; a length mismatch would filter the wrong positions and silently return a
      *   wrong counterexample (the same silent class as the generators' context guards)
-     * @param  Generator<Command<TModel, TSut, mixed>>             $alphabet  the generator, for family-3 argument shrinking
-     * @param  callable(): TSut                                    $freshSut
-     * @param  TModel                                              $initialModel
+     * @param  callable(): TSut                    $freshSut
+     * @param  TModel                              $initialModel
      * @return ShrinkResult<TModel, TSut>
      */
-    public function shrink(array $failing, RunResult $original, Generator $alphabet, callable $freshSut, mixed $initialModel): ShrinkResult;
+    public function shrink(array $failing, RunResult $original, callable $freshSut, mixed $initialModel): ShrinkResult;
 }
 
 /**
- * Candidates, lazily, in the order defined in Scope (structural, then per-command argument).
- * Non-executed positions (SPEC-001 AC4) are already gone from $sequence. The argument family calls
- * `$alphabet->shrink()` on the GeneratedValue at each position; candidates keep their contexts, so
- * an accepted one can be re-shrunk (restart). To run a candidate, unwrap each GeneratedValue to a
- * cloned Command for the runner (R9b). No `shrunkOnce` flag: it existed only to try the empty probe
- * once (fast-check), and the probe is gone (D022) — the two families generate identically on the
- * first shrink and every restart.
+ * Candidates, lazily, in the structural family's order (Scope). Non-executed positions (SPEC-001
+ * AC4) are already gone from $sequence. To run a candidate, each command is shallow-cloned for the
+ * runner (R9b). No `shrunkOnce` flag: it existed only to try the empty probe once (fast-check), and
+ * the probe is gone (D022).
  *
  * @template TModel
  * @template TSut
  *
- * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence  executed commands only, with contexts
- * @param  Generator<Command<TModel, TSut, mixed>>            $alphabet
- * @return iterable<list<GeneratedValue<Command<TModel, TSut, mixed>>>>
+ * @param  list<Command<TModel, TSut, mixed>>  $sequence  executed commands only
+ * @return iterable<list<Command<TModel, TSut, mixed>>>
  */
-function candidateReductions(array $sequence, Generator $alphabet): iterable;
+function candidateReductions(array $sequence): iterable;
 ```
 
-**The three forms at the layer boundary**, made explicit so no one discovers the conversion mid-build:
+**The forms at the layer boundary**, made explicit so no one discovers the conversion mid-build:
 
-- **SPEC-005 (draws)** holds `list<GeneratedValue<Command>>` and the alphabet `Generator`, and hands
-  both to the shrinker on a failure.
-- **SPEC-002 (shrinks)** works on the `GeneratedValue`s (family 3 needs their context and the
-  generator) and yields `GeneratedValue` candidates.
-- **SPEC-001 (runs)** takes bare `Command`s: each candidate is unwrapped and shallow-cloned (R9b)
-  before `SequenceRunner::run`.
+- **SPEC-005 (draws)** draws `GeneratedValue<Command>`s from the alphabet. On a failure it unwraps to
+  bare `list<Command>` and hands that to the shrinker — v0.1's shrinker has no use for the context.
+- **SPEC-002 (shrinks)** works on bare `Command`s and yields bare `Command` candidates.
+- **SPEC-001 (runs)** takes bare `Command`s: each candidate is shallow-cloned (R9b) before
+  `SequenceRunner::run`.
 
 Counterexample rendering matters more than it looks. fast-check invests real
 effort in `toString` delegation, and the reason its shrink tests can assert an

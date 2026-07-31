@@ -3,8 +3,6 @@
 declare(strict_types=1);
 
 use Provemark\StatefulCheck\Command;
-use Provemark\StatefulCheck\Generation\Gen;
-use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\SequenceRunner;
 use Provemark\StatefulCheck\Shrinking\SequenceShrinker;
@@ -144,12 +142,12 @@ it('shrinks an order-dependent bug to its known minimal sequence [Prime, Trip] (
     // capability the retained-suffix family needs) and the MIDDLE noise in a SEPARATE pass (a
     // non-contiguous drop the loop's restart provides). One planted case exercises both.
     $failing = [
-        new GeneratedValue(new OrderNoise),
-        new GeneratedValue(new OrderPrime),
-        new GeneratedValue(new OrderNoise),
-        new GeneratedValue(new OrderTrip),
+        new OrderNoise,
+        new OrderPrime,
+        new OrderNoise,
+        new OrderTrip,
     ];
-    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, 0);
+    $original = (new SequenceRunner)->run($failing, $freshSut, 0);
 
     // Guard against a false red: every command — both Noise included — must genuinely execute and the
     // run must fail at Trip. If a Noise were skipped or unreached it would fall out via AC3 before the
@@ -158,7 +156,7 @@ it('shrinks an order-dependent bug to its known minimal sequence [Prime, Trip] (
         ->and($original->executed)->toBe([true, true, true, true]);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, Gen::constant(new OrderNoise), $freshSut, 0,
+        $failing, $original, $freshSut, 0,
     );
 
     // The exact minimal sequence, by string form (SPEC-002 AC7).

@@ -1136,3 +1136,33 @@ roughly a single pass there and several passes on shorter sequences. Verdict: 10
 long sequences (D007's intent), not a formality. What makes a tight budget safe rather than silently
 wrong is AC9's honest `budgetExhausted` flag ("stopped before the minimum"). No change to the default;
 recorded so a later reader knows the quadratic cost was weighed, not overlooked.
+
+## Step 38 — Retracting a dead layer: $alphabet, the GeneratedValue wrapper, and D021 (2026-07-31)
+
+Finalising AC7 exposed that `$alphabet` was an unused parameter — and pulling that thread showed it
+was not a dead *parameter* but a dead *layer*. The shrinker reads only `->value` off every
+`GeneratedValue`, never `->context`; the context is read solely by the generators (SPEC-003). The
+wrapper-as-shrinker-input existed only so family 3 could reduce arguments from the context, and D021
+existed only to make that safe. With family 3 deferred out of scope (no v0.1 case needs it — the AC7
+bug is argument-free), all three go together: the shrinker now takes a bare `list<Command>`. One
+retraction commit before 7d, not split — the parts need each other, and a half-state (wrapper gone,
+spec not updated) is not a meaningful point in the history (unlike the AC3 revision, where the split
+proved the test on its own).
+
+Two observations maurice drew, both deliberately **not** made into rules:
+
+1. **The speculative-abstraction pattern is now n=2 (D010 `fork()`, this layer) but needs no R12.**
+   Both are an abstraction added on an expectation that did not arrive, removed when the evidence
+   stayed absent. §4 already forbids exactly this ("no abstraction the dogfood suites don't need"). A
+   rule against something a rule already covers dilutes the set. What is worth recording is not a new
+   rule but the *shape*: I added both on my own initiative and maurice restored §4 both times — an
+   observation about how these amendments arise, not a gate.
+
+2. **"The spec describes something that does not exist" is now n=3 — and that IS a pattern worth
+   naming.** Failure::$reason (a field no channel could supply), the empty-sequence probe (a branch
+   the runner cannot trigger, D022), and now D021 (a "new wrapper" the code never built — `replay()`
+   always ran bare clones). The first two are caught by R11 at approval; D021 is a different flavour —
+   a decision's *prose* drifting from the *code* with nothing failing — and only the three-sided
+   traceability pass at `implemented` catches it. So it reinforces why that pass exists rather than
+   asking for a new rule: prose and code diverge silently, and a periodic reconciliation is the only
+   thing that surfaces it.

@@ -48,15 +48,22 @@ All notable changes to this project are documented here. Format follows
 
 ### Changed
 
-- SPEC-002 (sequence shrinking) `approved`, then amended: AC5 (the empty-sequence probe) removed as D022 — it cannot fail in this model, so it was a useless execution and a dead branch; `shrunkOnce` removed with it. CLAUDE.md gains R11 (an AC is proven fulfillable before approval), promoted on n=2 with `Failure::$reason`.
+- SPEC-002 (sequence shrinking) implemented AC by AC; then, at the AC7 traceability check, the
+  per-command argument family and the whole layer serving it were **retracted** (2026-07-31): the
+  shrinker takes a bare `list<Command>`, the `$alphabet` generator param and the `GeneratedValue`
+  wrapper input are gone, and D021 is retracted (it was never even implemented — `replay()` ran bare
+  clones). No v0.1 case needs argument shrinking; carrying the layer was speculative generality (§4),
+  the same shape as D010 (`fork()`). A later spec re-adds argument shrinking with its consumer.
+- SPEC-002 (sequence shrinking) `approved`, then amended: AC5 (the empty-sequence probe) removed as D022 — it cannot fail in this model, so it was a useless execution and a dead branch; `shrunkOnce` removed with it. CLAUDE.md gains R11 (an AC is proven fulfillable before approval), promoted on n=2 with `Failure::$reason`. AC8 later broadened to path-**or**-verdict divergence.
 - SPEC-002 (sequence shrinking) originally `approved` (maurice, 2026-07-30) after a review against the
   now-built SPEC-001/SPEC-003. Amended before approval: the shrinker takes the generated sequence
   as `list<GeneratedValue<Command>>` **and** the alphabet generator (family-3 argument shrinking is
-  `alphabet->shrink(generatedValues[i])`); the generic signature replaces the stale bare
-  `list<Command>` (R10); `Failure::sameKindAs()` is now an explicit deliverable with its own AC10
-  (exact-class, D020, subclass ≠ parent); the branch-choice coverage gap (SPEC-003 AC5) and the
-  three-form layer boundary (generated / shrink / run) are stated; AC1 cites D020. D021 records the
-  clone-the-command-keep-the-context rule with the command as the authoritative side.
+  `alphabet->shrink(generatedValues[i])`) — **later retracted, see above**; the generic signature
+  replaces the stale bare `list<Command>` (R10); `Failure::sameKindAs()` is now an explicit
+  deliverable with its own AC10 (exact-class, D020, subclass ≠ parent); the branch-choice coverage
+  gap (SPEC-003 AC5) and the three-form layer boundary (generated / shrink / run) are stated; AC1
+  cites D020. D021 records the clone-the-command-keep-the-context rule with the command as the
+  authoritative side (retracted 2026-07-31).
 - SPEC-003 (generation core) is `implemented`. The last deferred piece, the command-alphabet
   generator (`Gen::alphabet`, AC5), landed: uniform choice over a heterogeneous list of command
   generators, recording the chosen branch so shrinking delegates argument-shrinking to the

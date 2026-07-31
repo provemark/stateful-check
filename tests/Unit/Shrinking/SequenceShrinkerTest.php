@@ -5,8 +5,6 @@ declare(strict_types=1);
 use Provemark\StatefulCheck\Command;
 use Provemark\StatefulCheck\Failure;
 use Provemark\StatefulCheck\FailureKind;
-use Provemark\StatefulCheck\Generation\Gen;
-use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\Ref;
 use Provemark\StatefulCheck\RunResult;
@@ -92,16 +90,16 @@ it('filters the executed subset by reading the record, with no capacity to run a
     // constructions: the capability is absent, not merely unused). A fabricated record is fine here:
     // the filter reads it, it does not validate that it reproduces (that is shrink()'s job, AC8).
     $failing = [
-        new GeneratedValue(new Cmd('a')), // skipped: precondition false
-        new GeneratedValue(new Cmd('b')), // executed, and failed here
-        new GeneratedValue(new Cmd('c')), // never reached (after the failure at b)
+        new Cmd('a'), // skipped: precondition false
+        new Cmd('b'), // executed, and failed here
+        new Cmd('c'), // never reached (after the failure at b)
     ];
     $original = new RunResult(false, [false, true, false], new Failure(FailureKind::PostconditionFalse, 1, Cmd::class));
 
     $subset = (new SequenceShrinker(new SequenceRunner))->executedSubset($failing, $original);
 
     // Both the skipped (a) and never-reached (c) commands are gone; b remains.
-    expect(array_map(fn (GeneratedValue $value): string => (string) $value->value, $subset))->toBe(['b']);
+    expect(array_map(fn (Command $c): string => (string) $c, $subset))->toBe(['b']);
 })->group('SPEC-002');
 
 it('drops non-executed commands without running a candidate (SPEC-002 AC3)', function () {
@@ -110,14 +108,14 @@ it('drops non-executed commands without running a candidate (SPEC-002 AC3)', fun
     // fails its postcondition, c is never reached) so AC8's replay reproduces it and does not abort.
     $freshSut = fn (): stdClass => new stdClass;
     $failing = [
-        new GeneratedValue(new Fixed('a', pre: false, post: true)), // skipped: precondition false
-        new GeneratedValue(new Fixed('b', pre: true, post: false)),  // executed, and failed here
-        new GeneratedValue(new Fixed('c', pre: true, post: true)),   // never reached (after b)
+        new Fixed('a', pre: false, post: true), // skipped: precondition false
+        new Fixed('b', pre: true, post: false),  // executed, and failed here
+        new Fixed('c', pre: true, post: true),   // never reached (after b)
     ];
-    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+    $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, Gen::constant(new Fixed('unused', pre: true, post: true)), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
 
     // b remains, and no candidate ran to discover the drop: the filter reads the record, it does not
@@ -128,7 +126,7 @@ it('drops non-executed commands without running a candidate (SPEC-002 AC3)', fun
 })->group('SPEC-002');
 
 it('fails loudly when the executed record does not match the sequence length', function () {
-    $failing = [new GeneratedValue(new Cmd('a')), new GeneratedValue(new Cmd('b'))];
+    $failing = [new Cmd('a'), new Cmd('b')];
     // Three executed entries for a two-command sequence: `$failing` and `$original` are not the same
     // run. Filtering on this would drop the wrong positions and silently return a wrong answer.
     $original = new RunResult(false, [true, false, true], new Failure(FailureKind::PostconditionFalse, 0, Cmd::class));
@@ -136,7 +134,6 @@ it('fails loudly when the executed record does not match the sequence length', f
     expect(fn () => (new SequenceShrinker(new SequenceRunner))->shrink(
         $failing,
         $original,
-        Gen::constant(new Cmd('unused')),
         fn (): stdClass => new stdClass,
         null,
     ))->toThrow(LogicException::class);
@@ -145,10 +142,10 @@ it('fails loudly when the executed record does not match the sequence length', f
 it('every structural candidate retains the last executed command (SPEC-002 AC4)', function () {
     // The filtered failing sequence; d is the last executed command — the one that failed.
     $sequence = [
-        new GeneratedValue(new Cmd('a')),
-        new GeneratedValue(new Cmd('b')),
-        new GeneratedValue(new Cmd('c')),
-        new GeneratedValue(new Cmd('d')),
+        new Cmd('a'),
+        new Cmd('b'),
+        new Cmd('c'),
+        new Cmd('d'),
     ];
 
     $candidates = iterator_to_array((new SequenceShrinker(new SequenceRunner))->candidateReductions($sequence), false);
@@ -157,7 +154,7 @@ it('every structural candidate retains the last executed command (SPEC-002 AC4)'
     expect($candidates)->not->toBeEmpty();
 
     foreach ($candidates as $candidate) {
-        $labels = array_map(fn (GeneratedValue $gv): string => (string) $gv->value, $candidate);
+        $labels = array_map(fn (Command $c): string => (string) $c, $candidate);
 
         // Every candidate ends with d: removing the command that caused the failure is never a
         // useful reduction, so the structural family never drops it. And it is a real reduction.
@@ -312,13 +309,13 @@ final class Blow implements Command
 it('shrinks to a local minimum: no single further reduction still fails (SPEC-002 AC2)', function () {
     $freshSut = fn (): Ref => new Ref(0);
     // Two Triggers make it fail (counter reaches 2); the Noise between them is irrelevant.
-    $failing = [new GeneratedValue(new Trigger), new GeneratedValue(new Noise), new GeneratedValue(new Trigger)];
-    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+    $failing = [new Trigger, new Noise, new Trigger];
+    $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $originalFailure = $original->failure ?? throw new RuntimeException('the failing sequence did not fail');
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
 
     // AC1 invariant (cross-cutting, live for the first time): the returned sequence still fails, and
@@ -333,9 +330,8 @@ it('shrinks to a local minimum: no single further reduction still fails (SPEC-00
     expect(count($result->commands))->toBeLessThan(count($failing))
         ->and($result->executions)->toBeGreaterThan(0);
 
-    $reWrapped = array_map(fn ($c) => new GeneratedValue($c), $result->commands);
-    foreach ((new SequenceShrinker(new SequenceRunner))->candidateReductions($reWrapped) as $candidate) {
-        $r = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $candidate), $freshSut, null);
+    foreach ((new SequenceShrinker(new SequenceRunner))->candidateReductions($result->commands) as $candidate) {
+        $r = (new SequenceRunner)->run($candidate, $freshSut, null);
         $reproduces = ! $r->passed && $r->failure !== null && $r->failure->sameKindAs($originalFailure);
         expect($reproduces)->toBeFalse();
     }
@@ -346,14 +342,14 @@ it('does not drift to a candidate that fails for a different reason (SPEC-002 AC
     // [Prime, Blow]: Prime sets the counter to 1, Blow (counter != 0) fails its postcondition — a
     // PostconditionFalse. Dropping Prime leaves [Blow], which throws on a zero counter — an
     // UnexpectedException, a different kind. The shrinker must reject that drift.
-    $failing = [new GeneratedValue(new Prime), new GeneratedValue(new Blow)];
-    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+    $failing = [new Prime, new Blow];
+    $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $originalFailure = $original->failure ?? throw new RuntimeException('the failing sequence did not fail');
     expect($originalFailure->kind)->toBe(FailureKind::PostconditionFalse);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
 
     // The returned sequence still fails the ORIGINAL kind — the loop did not accept [Blow]'s
@@ -366,13 +362,12 @@ it('does not drift to a candidate that fails for a different reason (SPEC-002 AC
 })->group('SPEC-002');
 
 it('fails loudly when the original run did not fail', function () {
-    $failing = [new GeneratedValue(new Cmd('a'))];
+    $failing = [new Cmd('a')];
     $passing = new RunResult(true, [true]); // a passing run has no failure to shrink toward
 
     expect(fn () => (new SequenceShrinker(new SequenceRunner))->shrink(
         $failing,
         $passing,
-        Gen::constant(new Cmd('unused')),
         fn (): stdClass => new stdClass,
         null,
     ))->toThrow(LogicException::class);
@@ -472,18 +467,18 @@ final class Check implements Command
 it('clones a command between candidates, so its mutable state does not leak (SPEC-002 AC6)', function () {
     $log = new CloneLog;
     $check = new Check($log);
-    $failing = [new GeneratedValue(new Setup), new GeneratedValue(new Noise), new GeneratedValue($check)];
+    $failing = [new Setup, new Noise, $check];
     // Fabricated so Check stays pristine until the shrinker clones it (a real run would mutate it).
     $original = new RunResult(false, [true, true, true], new Failure(FailureKind::PostconditionFalse, 2, Check::class));
 
     (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, Gen::constant(new Noise), fn (): Ref => new Ref(0), null,
+        $failing, $original, fn (): Ref => new Ref(0), null,
     );
 
     // Check ran in several candidates. If each candidate cloned it (R9b), it always saw its pristine
     // counter (0); a leak would let $ran accumulate across candidates. Non-vacuous: it ran more than
     // once, so a leak would show. The original object is never mutated — the loop carries the
-    // original GeneratedValues, and stillFails clones locally.
+    // original commands, and stillFails clones locally.
     expect(count($log->records))->toBeGreaterThan(1)
         ->and($check->ran)->toBe(0);
     foreach ($log->records as $ran) {
@@ -493,8 +488,8 @@ it('clones a command between candidates, so its mutable state does not leak (SPE
 
 it('respects the budget: reaching the minimum within it is minimal, one short is budget-limited (SPEC-002 AC9)', function () {
     $freshSut = fn (): Ref => new Ref(0);
-    $failing = [new GeneratedValue(new Trigger), new GeneratedValue(new Noise), new GeneratedValue(new Trigger)];
-    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+    $failing = [new Trigger, new Noise, new Trigger];
+    $original = (new SequenceRunner)->run($failing, $freshSut, null);
     $originalFailure = $original->failure ?? throw new RuntimeException('the failing sequence did not fail');
 
     // Measure how many candidate runs reaching the local minimum costs — do not hardcode it. That
@@ -506,7 +501,7 @@ it('respects the budget: reaching the minimum within it is minimal, one short is
     // budget, so N is a valid natural cost.
     $measuringBudget = 1000;
     $unbounded = (new SequenceShrinker(new SequenceRunner, budget: $measuringBudget))->shrink(
-        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
     $n = $unbounded->executions;
     $minimum = array_map(fn (Command $c): string => (string) $c, $unbounded->commands);
@@ -518,7 +513,7 @@ it('respects the budget: reaching the minimum within it is minimal, one short is
     // limited, even though executions === budget. The flag means "stopped before the minimum", not
     // "budget reached".
     $atBudget = (new SequenceShrinker(new SequenceRunner, budget: $n))->shrink(
-        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
     expect($atBudget->budgetExhausted)->toBeFalse()
         ->and($atBudget->executions)->toBe($n)
@@ -526,7 +521,7 @@ it('respects the budget: reaching the minimum within it is minimal, one short is
 
     // Budget N - 1: one run short of confirming the minimum — budget-limited, best-so-far returned.
     $underBudget = (new SequenceShrinker(new SequenceRunner, budget: $n - 1))->shrink(
-        $failing, $original, Gen::constant(new Noise), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
     expect($underBudget->budgetExhausted)->toBeTrue()
         ->and($underBudget->executions)->toBe($n - 1);
@@ -661,11 +656,11 @@ it('aborts shrinking when the replay path diverges — non-determinism (SPEC-002
     // Flaky executes in the original run (counter 0) but is skipped on the replay (counter 1), so the
     // execution path diverges. The shrinker must abort, not report a counterexample from an unstable
     // run.
-    $failing = [new GeneratedValue(new Flaky(new Counter)), new GeneratedValue(new FailCmd)];
-    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+    $failing = [new Flaky(new Counter), new FailCmd];
+    $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, Gen::constant(new FailCmd), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
 
     // Aborted: the original counterexample is returned unshrunk, flagged non-deterministic. The AC1
@@ -679,11 +674,11 @@ it('aborts when the replay verdict diverges though the path is identical (SPEC-0
     $freshSut = fn (): stdClass => new stdClass;
     // FlakyPost always runs (path stable) but its postcondition fails on the first run and passes on
     // the replay — the verdict flips. A path-only check would miss it; the broadened check catches it.
-    $failing = [new GeneratedValue(new FlakyPost(new Counter))];
-    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+    $failing = [new FlakyPost(new Counter)];
+    $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, Gen::constant(new FailCmd), $freshSut, null,
+        $failing, $original, $freshSut, null,
     );
 
     expect($result->abandonedNonDeterministic)->toBeTrue()

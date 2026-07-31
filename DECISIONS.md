@@ -404,11 +404,29 @@ identical defects as different failures, defeating same-reason comparison. That 
 mode, not a taste preference, is what would force an `instanceof`-style or fingerprint-based
 identity.
 
-## D021 — A GeneratedValue<Command> wrapper's command and context are one matched pair; the command leads
+## D021 — Retracted: the GeneratedValue<Command> wrapper's command/context pairing
 
 Spec: SPEC-002 (cloning between candidates, R9b); the alphabet generator's context (SPEC-003 AC5)
-Status: **decided**
-Decided: maurice, 2026-07-30
+Status: **retracted, 2026-07-31 — the whole layer it governed is gone**
+Retracted: maurice, 2026-07-31. D021 existed only to make family 3's use of the wrapper's context
+safe ("family 3 re-derives argument reductions from the context's integer value… does not read the
+wrapper's command"). With the argument family deferred out of SPEC-002 to a later spec, nothing reads
+the context: the shrinker takes bare `list<Command>`, and the `$alphabet` parameter, the
+`GeneratedValue` wrapper as the shrinker's input, and this decision all go together (the same shape as
+D010/`fork()` — an abstraction added on an expectation that did not arrive, removed when the evidence
+stayed absent; the second time that has happened, covered by §4, not a new rule).
+
+Recorded separately because it is informative on its own: **the code never conformed to D021.** D021
+says a candidate clones the command "into a **new wrapper** carrying the shallow clone and the same,
+unchanged context"; the shrinker never built such a wrapper — `replay()` clones the command out and
+runs it bare, discarding the wrapper. So this was a decision written and never implemented, surfaced
+only at the AC7 traceability check. That is the same class as `Failure::$reason` (a documented field
+no channel could supply) — the **third** time "the spec describes something that does not exist" has
+shown up, and now the pattern worth naming: a decision's prose can drift from the code with nothing
+failing, and only a traceability pass catches it.
+
+The original decision, now void, is kept below for the record.
+
 Decision: a `GeneratedValue<Command>` pairs a command with the context that produced it in one
 `generate()`. Running a candidate clones the command out of the wrapper (R9b) into a **new wrapper**
 carrying the shallow clone and the **same, unchanged context**; the context is shrink data, never
