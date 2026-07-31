@@ -2,9 +2,9 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | draft                                             |
+| Status     | approved                                          |
 | Author     | maurice                                           |
-| Approved   | — (draft)                                         |
+| Approved   | maurice, 2026-07-31                               |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -38,7 +38,22 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
 - A single entry point taking: the command alphabet, a **setup** that produces a
   fresh model and system together — optionally parameterised by a generated
   initial state — a maximum sequence length, a number of runs, and a seed (D012).
-- The generate → run → (on failure) shrink → report loop.
+- The entry point is **generic** over the model, system, and initial-state types
+  (`@template TModel, TSut, TInitial`), like `SequenceRunner`. Leaving them `mixed`
+  is not minimalism — it is the same entry point with less information, and it would
+  leave the dogfood setup's carefully typed `BuilderModel`/`Ref` unchecked against
+  the commands (the D017/D019 lesson). Because the entry point *holds* the alphabet,
+  the templates are class-level, not per-method. `TInitial` threads through to
+  `PropertyResult` so a consumer reads the drawn initial state typed, not as `mixed`.
+  The **R10 gate applies to `TModel`/`TSut`/`TResult` only** — the alphabet is the
+  heterogeneous composition (many commands, one model/system, varying result), and it
+  type-checks at PHPStan max (verified). `TInitial` needs no such check: it comes from
+  a single `initial` generator, so there is no heterogeneous list to compose — the
+  same reason `Ref<T>` never triggered R10.
+- The generate → run → (on failure) shrink → report loop. On a failure the entry
+  point keeps the failing `RunResult` from the run and threads it — with the bare
+  `list<Command>`, `freshSut`, and `initialModel` — into SPEC-002's `shrink()`,
+  which consumes rather than rediscovers it (AC2).
 - Deterministic reproduction from a seed, end to end (this is where SPEC-001's
   former AC5 lives).
 - A result object carrying pass/fail, the seed used, the number of runs
@@ -68,9 +83,13 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
 - **AC2 — a failing property returns a shrunk counterexample**
   - Given a property that fails for some sequence
   - When the entry point is invoked
-  - Then generation stops at the first failing sequence, that sequence is passed
-    to the shrinker, and the result carries the shrunk counterexample and its
-    `Failure`.
+  - Then generation stops at the first failing sequence; that sequence's **run** is
+    handed to the shrinker — the bare `list<Command>`, the failing `RunResult` from
+    that run, and the same `freshSut` and `initialModel` (SPEC-002's `shrink()` is a
+    consumer of what already happened: it reads the `RunResult` for the executed-set
+    filter, the replay baseline, and the `sameKindAs` baseline, and does not re-run
+    the sequence to rediscover them). The result carries the shrunk counterexample
+    and its `Failure`.
 
 - **AC3 — the same seed reproduces the same result** *(R4; formerly SPEC-001
   AC5)*
@@ -80,13 +99,18 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
     same verdict and counterexample are produced — including across separate
     processes.
 
-- **AC4 — the seed and the generated initial state are always reported**
+- **AC4 — the result renders a complete, reproducible failure report**
   - Given any result, passing or failing
   - When it is inspected
   - Then it names the seed used — including when the seed was generated rather than
-    supplied — and, on a failure, the initial state drawn for the counterexample,
-    which `counterexampleAsString()` renders. Without both, the failure cannot be
-    reproduced or even fully read, which defeats the point.
+    supplied — and, on a failure, `counterexampleAsString()` produces the one
+    reproduction artefact: the drawn initial state **and** the command sequence in
+    its readable form (`initial=… · withAgent[1],build[2]`). All of it is one
+    output, tested as one — a seed with no commands, or commands with no initial
+    state, cannot reproduce the failure or even be fully read, which defeats the
+    point. The command-sequence format is already load-bearing: SPEC-002's AC7
+    meta-test asserts the shrunk counterexample by its string form, so this AC pins
+    the surrounding report, not the per-command rendering (SPEC-001's `__toString`).
 
 - **AC5 — a qualified shrink is reported, not hidden**
   - Given a failure whose shrinking hit the budget or was abandoned because the
@@ -105,17 +129,32 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
 - **AC7 — model and system start from one consistent setup** *(D012)*
   - Given an optional initial-state generator and a setup that builds both model
     and system from a drawn initial state
-  - When a sequence is generated
-  - Then the value drawn for that sequence is passed to the setup exactly once, and
-    the model and system it returns both begin from that same initial state — the
-    API offers no way to seed the two inconsistently.
+  - When the sequence is first run
+  - Then the initial value is **drawn once per sequence**, and the initial run calls
+    `setup($initial)` **once**, deriving both sides from that single call —
+    `initialModel = $setup->model` and the system `$setup->system` — so the API offers
+    no way to seed model and system inconsistently. The value is **drawn** once; how
+    `setup` is then re-called per shrink candidate (for a fresh system, with the model
+    reused) is AC8's concern. No execution ever seeds model and system from different
+    draws.
 
 - **AC8 — shrinking holds the initial state fixed** *(D012, R4)*
   - Given a failing sequence whose setup was built from a drawn initial state
   - When the sequence is shrunk
-  - Then every candidate is run through `setup` called with that **same** initial
-    state; the value is never re-drawn per candidate, which would change the system
-    under the shrinker and make the result meaningless.
+  - Then every candidate is run against a **fresh system** from that same initial
+    state — `freshSut = fn () => setup($initial)->system`, so `setup` is re-called per
+    candidate for a fresh system, but with the value drawn once, never re-drawn.
+    Re-drawing would change the system under the shrinker and make the result
+    meaningless.
+  - *Asymmetry, and why it is safe (R6).* `shrink()` takes the model as a single
+    **value** (`initialModel`, reused across every candidate) but the system as a
+    **factory** (`freshSut`, a fresh instance per candidate). The system is mutable,
+    so it must be fresh each candidate (R9b); the model is shared. That sharing is
+    sound **only because `nextState` is pure** — it returns a new model and never
+    mutates the one passed in. A `nextState` that mutated it would leak model state
+    between candidates, the R9b leak one layer up, silently. So `nextState`'s purity
+    is load-bearing here as well as for R6's oracle argument; neither may be relaxed
+    without breaking the other (recorded at R6).
   - *Requirement (D022): the bug whose initial state is held fixed must surface
     **through a command** — a command's postcondition (or a thrown exception) is
     what detects the bad initial state. A failure that fires for a specific initial
@@ -130,9 +169,11 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
   - Given a maximum length *n*
   - When the entry point draws a sequence
   - Then its length is drawn by `Gen::integers(1, $n, origin: 1)` — always between 1 and *n*,
-    never zero, and shrinking it approaches 1. The empty sequence is deliberately never drawn
-    here: it is SPEC-002's own first shrink candidate ("did the commands cause the failure at
-    all?"), a semantically distinct step this layer does not touch (D018).
+    never zero, and shrinking it approaches 1. A zero-length sequence is deliberately never
+    drawn because it has nothing to run and so nothing to fail: the runner checks nothing at
+    zero commands (D022), so an empty draw could only ever pass — a wasted run. (SPEC-002 no
+    longer probes the empty sequence either; D022 removed that candidate for the same reason.
+    This convention is why the empty case never even reaches the shrinker, D018.)
   - *This is a convention, not a new generator: it is a usage of `integers`, whose behaviour AC2
     of SPEC-003 already covers. What a test here pins is the choice `min: 1, origin: 1` — a
     change to `[0, n]` or `origin: 0` must break it — guarding D018.*
@@ -148,22 +189,32 @@ Illustrative only.
 ```php
 // namespace Provemark\StatefulCheck;
 
+/**
+ * @template TModel
+ * @template TSut
+ * @template TInitial
+ */
 final readonly class PropertyResult
 {
-    /** @param list<Command> $counterexample */
+    /**
+     * @param  list<Command<TModel, TSut, mixed>>  $counterexample
+     * @param  TInitial|null  $initial  the drawn initial state (AC4), typed so a consumer can inspect
+     *                                  it without a cast; null on a pass (no counterexample) and when
+     *                                  no initial generator was supplied
+     */
     public function __construct(
         public bool $passed,
         public int $seed,
         public int $runs,
         public array $counterexample = [],
         public ?Failure $failure = null,
-        public mixed $initial = null,   // initial state drawn for the counterexample (AC4)
+        public mixed $initial = null,
         public bool $budgetExhausted = false,
         public bool $abandonedNonDeterministic = false,
     ) {}
 
-    /** "initial=Png · inc[1],check[1]" — includes the initial state, without which
-     *  the counterexample is incomplete (AC4). */
+    /** "initial=Png · withAgent[1],build[2]" — the one reproduction artefact: initial
+     *  state and command sequence together, incomplete without either (AC4). */
     public function counterexampleAsString(): string;
 }
 
@@ -174,21 +225,35 @@ final readonly class PropertyResult
  * closures (D012): those were nullary, so they could not thread a generated
  * initial state — a MediaType, a tenant id — into both sides consistently, and
  * they left model and system asymmetric for no reason.
+ *
+ * @template TModel
+ * @template TSut
  */
 final readonly class Setup
 {
+    /**
+     * @param  TModel  $model
+     * @param  TSut    $system
+     */
     public function __construct(public mixed $model, public mixed $system) {}
 }
 
+/**
+ * @template TModel
+ * @template TSut
+ * @template TInitial
+ */
 final class StatefulProperty
 {
     /**
-     * @param  list<Generator<Command>>  $alphabet
-     * @param  Closure(mixed): Setup     $setup    fn($initial) => new Setup($model, $system)
-     * @param  Generator<mixed>|null     $initial  drawn once per sequence and passed to
-     *                                             $setup. Omitted ⇒ Gen::constant(null),
-     *                                             applied internally, so $setup always
-     *                                             receives a value and there is one code path.
+     * @param  list<Generator<Command<TModel, TSut, mixed>>>  $alphabet  heterogeneous in TResult
+     *                                                                    (covariant, D019); one TModel/TSut
+     * @param  Closure(TInitial): Setup<TModel, TSut>         $setup    fn($initial) => new Setup($model, $system)
+     * @param  Generator<TInitial>|null                       $initial  drawn once per sequence and passed to
+     *                                                                  $setup. Omitted ⇒ Gen::constant(null),
+     *                                                                  applied internally, so $setup always
+     *                                                                  receives a value and there is one code path.
+     * @return PropertyResult<TModel, TSut, TInitial>                   (via check)
      */
     public function __construct(
         private array $alphabet,
@@ -198,6 +263,7 @@ final class StatefulProperty
         private int $runs = 100,
     ) {}
 
+    /** @return PropertyResult<TModel, TSut, TInitial> */
     public function check(?int $seed = null): PropertyResult;
 }
 ```
@@ -218,7 +284,8 @@ $result = (new StatefulProperty(
             Gen::elements(['Content Credentials', '']),
         ),
     ],
-    initial: Gen::mediaType(),                             // drawn once per sequence
+    // A domain generator is composed from primitives — `Gen` provides no `mediaType()`.
+    initial: Gen::elements([MediaType::png(), MediaType::jpeg()]),  // drawn once per sequence
     setup: fn (MediaType $type) => new Setup(
         model:  BuilderModel::initial($type),
         system: new Ref(ManifestBuilder::forAiGeneratedImage($type)),
@@ -251,19 +318,28 @@ public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
 }
 ```
 
+**Dogfood example 2 (HTTP), skip-when-unreachable is test-level, not an API feature.**
+`preCondition(mixed $model): bool` receives only the model, never the system, so a
+command *cannot* skip on live service reachability. In the original the skip is a
+Pest guard **before** `check()` (and the fake's `isReachable()` exists to make that
+guard visible); it decides whether to run the property at all, not whether to run a
+command mid-sequence. This is deliberate and stays test-level: the API offers no
+per-command reachability check, and no one should expect one from `preCondition`.
+
 ## Open questions
 
 - ~~**Does the entry point throw or return on failure?**~~ **Resolved (D009):**
   return a `PropertyResult`, as sketched — framework-agnostic and composable, with
   the assertion left to a single `expect()` line. Throwing would make an exception
   type the package's public failure channel.
-- **Stop at the first failure, or keep generating? — open, non-blocker.** AC2
-  stops at the first, which is what every implementation does. Continuing would
-  find independent failures in one pass but complicates the result shape. Do not
-  add it speculatively.
-- **Default run count — open, non-blocker.** 100 is the QuickCheck convention and
-  is fine in memory, but the HTTP-backed dogfood example will want far fewer.
-  Confirm the default and make it obvious how to lower it.
+- ~~**Stop at the first failure, or keep generating?**~~ **Resolved: stop at the
+  first**, as AC2 says and as every implementation does. Continuing would find
+  independent failures in one pass but complicates the result shape; not added
+  speculatively.
+- ~~**Default run count.**~~ **Resolved: default `runs = 100`** (the QuickCheck
+  convention, fine in memory), with the `runs:` constructor parameter as the escape
+  the HTTP-backed dogfood example uses to lower it. The default is obvious at the
+  call site and one argument overrides it.
 - ~~**Does the initial state shrink?**~~ **No — a documented limitation under R3
   (D012).** The value drawn from `initial` is held fixed for the whole
   counterexample (AC8); only the command sequence is reduced. So the reported
