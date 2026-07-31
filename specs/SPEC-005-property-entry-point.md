@@ -5,6 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-07-31                               |
+| Amended    | maurice, 2026-07-31 — AC6 broadened: it now guards `runs < 1` alongside an empty alphabet and `maxLength < 1` (all three are ways a property would run nothing, the failure mode AC6's own justification forbids — the trigger list was narrower than the promise), and the guard is pinned to **construction** (`InvalidArgumentException`), removing the "when invoked" ambiguity. A fourth way to run nothing — every command's precondition always failing — is a *runtime* vacuous pass, not construction-detectable; deferred to AC1 as an open question, not folded into AC6. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -119,12 +120,17 @@ R4 (determinism), CLAUDE.md §4 (build only what the dogfood suites need).
   - Then it reports the counterexample together with that qualification, so no
     reader mistakes a budget-limited result for a minimum (R3).
 
-- **AC6 — an empty or unusable alphabet fails loudly** *(required: error path)*
-  - Given an empty command alphabet, or a maximum length below one
-  - When the entry point is invoked
-  - Then it throws immediately with a message naming the problem, rather than
-    silently reporting success over zero sequences — a property that ran nothing
-    must never look like a property that passed.
+- **AC6 — a configuration that would run nothing fails loudly at construction** *(required: error path)*
+  - Given a command alphabet that is empty, a maximum length below one, or a run
+    count below one — any static configuration under which the property would
+    execute nothing
+  - When the `StatefulProperty` is constructed
+  - Then the constructor throws immediately (`InvalidArgumentException`) with a
+    message naming the problem, rather than letting an invalid property exist that
+    would silently report success over zero sequences — a property that ran nothing
+    must never look like a property that passed. Each of the three conditions is one
+    way to run nothing, so all three are guarded together. (A construction-time throw
+    is stricter than a check-time one: the invalid property never exists to be run.)
 
 - **AC7 — model and system start from one consistent setup** *(D012)*
   - Given an optional initial-state generator and a setup that builds both model
@@ -332,6 +338,16 @@ per-command reachability check, and no one should expect one from `preCondition`
   return a `PropertyResult`, as sketched — framework-agnostic and composable, with
   the assertion left to a single `expect()` line. Throwing would make an exception
   type the package's public failure channel.
+- **A vacuous pass — every precondition always fails — is undetected. — open, decide at AC1.**
+  If every command in the alphabet has a precondition that never holds, each of the *n* sequences
+  is generated and then fully skipped: zero executed commands, `passed === true`, indistinguishable
+  from a real pass. It is the same family as AC6's "run nothing" but a **runtime** property, so it
+  cannot be caught at construction (AC6). For a tool built to catch false confidence this is the
+  sharpest false confidence there is. It belongs on the table at **AC1**, where the implementation
+  already needs an independent count of how many commands actually ran (self-reported `runs` is not
+  enough): that same observation is what would detect a run in which nothing executed. Decide there
+  whether it is part of AC1 (a passing run must have executed at least one command across its
+  sequences) or its own AC. Not decided here.
 - ~~**Stop at the first failure, or keep generating?**~~ **Resolved: stop at the
   first**, as AC2 says and as every implementation does. Continuing would find
   independent failures in one pass but complicates the result shape; not added

@@ -1194,3 +1194,33 @@ $alphabet it removed the layer.
 
 **AC6's source corrected** stillFails → replay: the clone moved into `replay` when it was extracted at
 AC8. Another prose-drift the traceability pass caught — small, but the same class as D021.
+
+## Step 40 — SPEC-005 AC6: the gate enforced "build with the consumer" as a type error (2026-07-31)
+
+AC6 is the construction guard: empty alphabet / `maxLength < 1` / `runs < 1` throw
+`InvalidArgumentException` (a `runs < 1` broadening amended in — the trigger list was narrower than
+AC6's own "run nothing" promise). The plan was a full five-parameter constructor storing the config;
+PHPStan max refused it. `$setup`/`$initial`, accepted but unused, tripped `constructor.unusedParameter`;
+promoting them would trip `property.onlyWritten` (the SPEC-002 AC3 trap). So the constructor shrank to
+the three parameters the guard actually reads; `setup`/`initial`/`check()` join at AC1 with their
+consumer. (Even the test needed a real `Generator<Command>` — `Gen::constant(null)` is `Generator<null>`
+and the honest alphabet type rejects it — so a `StubCommand` double, not `null`.)
+
+Two observations worth keeping:
+
+1. **The gate enforced a rule the rulebook only asks for by judgement.** §4 ("no abstraction the dogfood
+   suites don't need") and R10 ask a human to weigh; `constructor.unusedParameter` + `property.onlyWritten`
+   simply *refuse* a parameter or field with no consumer. This is the exact shape I broke twice — fork()
+   (D010) and $alphabet (D021) — where we deliberately added no rule because §4 covered it. It turns out
+   PHPStan max enforces a large slice of it for free, as a type error rather than a review note. Useful
+   when judging a future sketch: if a constructor holds config for a not-yet-built reader, the gate will
+   reject it before review does.
+
+2. **Fourth time an API sketch lagged reality — a new variant: unbuildable from the start.** The prior
+   three (Failure::$reason, the empty-sequence probe, D021's never-built wrapper) were prose describing
+   something that did not exist or a decision the code never honoured. This one is different: the SPEC-005
+   sketch showed a five-parameter constructor that PHPStan max *cannot compile* as drawn — not stale from a
+   later decision, but never buildable as written. Checked the remaining SPEC-005 sketches for the same
+   property: `Setup` and `PropertyResult` are clean — they are `public readonly` value objects, so their
+   fields are read externally and neither the unused-parameter nor the write-only-property rule fires. The
+   defect was specific to `StatefulProperty`'s *private* config awaiting a deferred `check()`.
