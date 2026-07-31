@@ -34,7 +34,7 @@ final class StatefulProperty
         private readonly Closure $setup,
         private readonly Generator $initial,
         private readonly int $maxLength = 10,
-        int $runs = 100,
+        private readonly int $runs = 100,
     ) {
         // Each of these three is a static configuration under which the property would execute
         // nothing, and a property that ran nothing must never look like one that passed (AC6). Guard
@@ -54,23 +54,36 @@ final class StatefulProperty
 
     public function check(int $seed): PropertyResult
     {
+        // One seeded stream for the whole check: it advances across sequences, so each run draws a
+        // different sequence and initial. Re-seeding inside the loop would draw the same sequence n
+        // times.
         $source = Source::seeded($seed);
-
-        // Draw one sequence: a length in [1, maxLength] (origin 1), then that many commands drawn
-        // uniformly from the alphabet.
-        $length = Gen::integers(1, $this->maxLength, origin: 1)->generate($source)->value;
+        $lengths = Gen::integers(1, $this->maxLength, origin: 1);
         $commandGenerator = Gen::alphabet($this->alphabet);
-        $commands = [];
-        for ($i = 0; $i < $length; $i++) {
-            $commands[] = $commandGenerator->generate($source)->value;
+
+        for ($run = 0; $run < $this->runs; $run++) {
+            // Draw one sequence: a length in [1, maxLength] (origin 1), then that many commands drawn
+            // uniformly from the alphabet.
+            $length = $lengths->generate($source)->value;
+            $commands = [];
+            for ($position = 0; $position < $length; $position++) {
+                $commands[] = $commandGenerator->generate($source)->value;
+            }
+
+            // Convert the setup once per sequence (AC7): a fresh model and system from a single
+            // setup() call, so no sequence inherits another's state. `freshSut` is captured, so the
+            // runner's one call returns this sequence's system.
+            $initialValue = $this->initial->generate($source)->value;
+            $setup = ($this->setup)($initialValue);
+            $result = (new SequenceRunner)->run($commands, fn () => $setup->system, $setup->model);
+
+            if (! $result->passed) {
+                // Stop at the first failing sequence. AC2 will enrich this with the shrunk
+                // counterexample and its Failure; for now it is a bare failure verdict.
+                return new PropertyResult(passed: false);
+            }
         }
 
-        // Convert the setup once (AC7): draw the initial value, build model and system from a single
-        // setup() call, and run. `freshSut` is captured, so the runner's one call returns this system.
-        $initialValue = $this->initial->generate($source)->value;
-        $setup = ($this->setup)($initialValue);
-        $run = (new SequenceRunner)->run($commands, fn () => $setup->system, $setup->model);
-
-        return new PropertyResult(passed: $run->passed);
+        return new PropertyResult(passed: true);
     }
 }

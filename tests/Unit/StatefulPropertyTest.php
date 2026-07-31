@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use Provemark\StatefulCheck\Command;
 use Provemark\StatefulCheck\Generation\Gen;
+use Provemark\StatefulCheck\Generation\GeneratedValue;
+use Provemark\StatefulCheck\Generation\Generator;
+use Provemark\StatefulCheck\Generation\Source;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\Setup;
 use Provemark\StatefulCheck\StatefulProperty;
@@ -150,4 +153,145 @@ it('runs a drawn sequence and reports success for a passing property (SPEC-005 A
     // (Independent observation, not the result's self-report; sub-step 2 extends it to n runs.)
     expect($result->passed)->toBeTrue()
         ->and($counter->runs)->toBeGreaterThan(0);
+})->group('SPEC-005');
+
+// --- AC1 sub-step 2: n runs, fresh setup and drawn initial per sequence, stop at the first failure. -
+
+/** A plain counter, so a setup closure can record how many times it was called (once per sequence). */
+final class Tally
+{
+    public int $count = 0;
+}
+
+/**
+ * An initial-state generator that counts its draws — proves the initial is drawn per sequence (n),
+ * not once and reused (1). A `Gen::map` side effect would make an impure generator, so an explicit
+ * double is the honest form. Never shrunk here (no failure path uses it), so `shrink()` is empty.
+ *
+ * @implements Generator<null>
+ */
+final class CountingGenerator implements Generator
+{
+    public int $draws = 0;
+
+    public function generate(Source $source): GeneratedValue
+    {
+        $this->draws++;
+
+        return new GeneratedValue(null);
+    }
+
+    public function shrink(GeneratedValue $value): iterable
+    {
+        return [];
+    }
+}
+
+/**
+ * Passes on the first sequence, fails from the second: its postcondition reads a shared tally the
+ * setup increments once per sequence. Used to prove the loop runs past the first sequence and STOPS
+ * at the first failing one.
+ *
+ * @implements Command<null, null, null>
+ */
+final class FailsFromSecondSequence implements Command
+{
+    public function __construct(private Tally $tally) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $this->tally->count < 2;
+    }
+
+    public function __toString(): string
+    {
+        return 'failsFrom2';
+    }
+}
+
+it('runs n sequences, each with a fresh setup and its own drawn initial (SPEC-005 AC1)', function () {
+    $runs = new RunCounter;
+    $setups = new Tally;
+    $initialGenerator = new CountingGenerator;
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new RecordingCommand($runs))],
+        setup: function (mixed $initial) use ($setups): Setup {
+            $setups->count++;
+
+            return new Setup(model: null, system: null);
+        },
+        initial: $initialGenerator,
+        runs: 5,
+    );
+
+    $result = $property->check(seed: 999);
+
+    // Independent observations, not the result's self-report. `$setups->count === 5`: setup called
+    // once per sequence, so each run gets a fresh model+system — a leak would call it once, and a
+    // `system === model` postcondition would not catch that (model leaks with it, symmetrically).
+    // `$initialGenerator->draws === 5`: the initial is drawn per sequence (D012's cover-the-space),
+    // not once and reused (which would be 1).
+    expect($result->passed)->toBeTrue()
+        ->and($setups->count)->toBe(5)
+        ->and($initialGenerator->draws)->toBe(5)
+        ->and($runs->runs)->toBeGreaterThan(0);
+})->group('SPEC-005');
+
+it('stops at the first failing sequence and reports failure (SPEC-005 AC1)', function () {
+    $setups = new Tally;
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new FailsFromSecondSequence($setups))],
+        setup: function (mixed $initial) use ($setups): Setup {
+            $setups->count++;
+
+            return new Setup(model: null, system: null);
+        },
+        initial: Gen::constant(null),
+        runs: 5,
+    );
+
+    $result = $property->check(seed: 999);
+
+    // "Fails" and "stops" are two properties (SPEC-001 AC2). The property fails (passed false) AND the
+    // loop halts at the failing sequence (the 2nd), so only 2 setups happened — not all 5. A loop that
+    // ran all 5 would still report false but leave `$setups->count === 5`, catching a missing stop.
+    expect($result->passed)->toBeFalse()
+        ->and($setups->count)->toBe(2);
+})->group('SPEC-005');
+
+it('advances one seeded stream across the sequences, so they are not all identical (SPEC-005 AC1)', function () {
+    $received = [];
+    $property = new StatefulProperty(
+        alphabet: [Gen::constant(new StubCommand)],
+        setup: function (mixed $initial) use (&$received): Setup {
+            $received[] = $initial;
+
+            return new Setup(model: null, system: null);
+        },
+        initial: Gen::integers(0, 1_000_000),   // varies per draw, so re-seeding shows up
+        runs: 5,
+    );
+
+    $property->check(seed: 999);
+
+    // One `Source` runs through all sequences. Re-seeding it per iteration would draw the SAME
+    // sequence five times; with a varying generator the drawn initials would then be all identical.
+    // That they are not is the cheapest catch for a per-iteration re-seed — which the call-counting
+    // observations above cannot see.
+    expect(count(array_unique($received)))->toBeGreaterThan(1);
 })->group('SPEC-005');

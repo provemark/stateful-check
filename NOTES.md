@@ -1255,3 +1255,32 @@ would agree with the tests' `Setup<null, null>` (`Setup` is invariant). The rema
 interaction — the full generic `PropertyResult<TModel, TSut, TInitial>` (counterexample vs the shrinker's
 `ShrinkResult.commands`, initial vs the drawn `TInitial`) — reads clean on paper but is flagged to
 verify in combination when AC2/AC4 build it, not to assume.
+
+## Step 42 — SPEC-005 AC1 sub-step 2: n runs, fresh per sequence, stop at the first failure (2026-07-31)
+
+The skeleton's body moved into `for ($run = 0; $run < $this->runs; $run++)`; `runs` is now promoted
+(a reader exists). Three independent observations, each catching a distinct way the loop could be
+quietly wrong — none of them the result's self-reported `runs`:
+
+- **Fresh setup per sequence** (`$setups->count === n`): `setup()` is called inside the loop, so each
+  run gets a fresh model+system and inherits nothing. maurice's sharp point: a "system === model"
+  postcondition would *not* catch a setup-once leak, because model and system leak together and the
+  comparison stays true — a test that passes because the fault is symmetric. The setup-call counter
+  catches it directly (a leak calls setup once → count 1).
+- **Initial drawn per sequence** (`draws === n`), decided, not once-and-reused: AC7's "once per
+  sequence" and D012's whole motive — vary the initial to cover the space (all media types, not PNG
+  a hundred times). A setup-call counter alone would miss a draw-once-reuse (setup still called n
+  times), so a counting `CountingGenerator` double observes the draw count directly.
+- **One advancing seeded stream** (`count(array_unique($receivedInitials)) > 1`): `Source::seeded()`
+  sits *outside* the loop and advances, so each run draws a different sequence. maurice's catch:
+  re-seeding inside the loop would draw the *same* sequence n times — invisible to the call-counters,
+  which only count. A varying initial generator plus "the drawn initials are not all identical" is
+  the cheapest catch for a per-iteration re-seed.
+
+**The failure branch is proven, not just built.** Stop at the first failing sequence with a bare
+`passed: false` (AC2 will enrich it with the shrunk counterexample). The test uses
+`FailsFromSecondSequence` (passes sequence 1, fails from 2 via a shared tally the setup increments),
+and asserts both `passed === false` **and** `$setups->count === 2` — the loop halted at the failing
+sequence, not all n. "Stops" and "fails" are two properties (the SPEC-001 AC2 lesson); a loop that
+ran all n would still report false but leave the count at n. Building the branch without this second
+assertion would have been the `Failure::$reason`/D021 shape: correct, plausible, never verified.
