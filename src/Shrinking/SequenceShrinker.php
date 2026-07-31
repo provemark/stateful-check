@@ -63,6 +63,28 @@ final class SequenceShrinker
         // this baseline failure, so it must exist.
         $baseline = $original->failure ?? throw new LogicException('SequenceShrinker::shrink(): the original run did not fail.');
 
+        // Non-determinism guard (AC8, R4). Replay the whole failing sequence once and compare it to
+        // the recorded run: if the execution PATH or the VERDICT diverges, the system is unstable, so
+        // any counterexample derived from it would rest on a run that does not reproduce. Abort — hand
+        // back the original sequence unshrunk and *unfiltered* (filtering trusts $original->executed,
+        // the very record just shown unreliable) and flag it. This one replay is not a candidate
+        // execution (D007): it does not count toward the budget nor toward `executions`; it is a fixed
+        // one-run overhead. `passed` is compared to `passed` directly (not the derived
+        // `failure === null`), then the failure kind — the failure-null check also guards sameKindAs.
+        $replay = $this->replay($failing, $freshSut, $initialModel);
+        if ($replay->executed !== $original->executed
+            || $replay->passed !== $original->passed
+            || $replay->failure === null
+            || ! $replay->failure->sameKindAs($baseline)) {
+            return new ShrinkResult(
+                array_map(static fn (GeneratedValue $value): Command => $value->value, $failing),
+                count($failing),
+                0,
+                false,
+                abandonedNonDeterministic: true,
+            );
+        }
+
         // A counter, not a constant: it increments per candidate run below (AC2). The filter runs
         // nothing, so on a sequence with no structural reduction it stays zero (AC3).
         $executions = 0;
@@ -148,10 +170,28 @@ final class SequenceShrinker
      */
     private function stillFails(array $candidate, Failure $baseline, callable $freshSut, mixed $initialModel): bool
     {
-        $commands = array_map(static fn (GeneratedValue $value): Command => clone $value->value, $candidate);
-        $result = $this->runner->run($commands, $freshSut, $initialModel);
+        $result = $this->replay($candidate, $freshSut, $initialModel);
 
         return ! $result->passed && $result->failure !== null && $result->failure->sameKindAs($baseline);
+    }
+
+    /**
+     * Runs a sequence against a fresh system, shallow-cloning each command out of its wrapper first
+     * (R9b, D021), and returns the raw result. Shared by the candidate loop (via `stillFails`) and by
+     * the non-determinism guard, so both drive a sequence through the exact same path.
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence
+     * @param  callable(): TSut  $freshSut
+     * @param  TModel  $initialModel
+     */
+    private function replay(array $sequence, callable $freshSut, mixed $initialModel): RunResult
+    {
+        $commands = array_map(static fn (GeneratedValue $value): Command => clone $value->value, $sequence);
+
+        return $this->runner->run($commands, $freshSut, $initialModel);
     }
 
     /**

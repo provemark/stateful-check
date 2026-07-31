@@ -1068,3 +1068,32 @@ loop ever failed to terminate. AC1 asserted on the budget-limited result too: it
 
 With the budget in place, the spec condition that blocked the length-preserving argument family is
 **satisfied** — a forward reference to AC7 (alongside the restart gate) to tick off at finalisation.
+
+## Step 36 — AC8 non-determinism: broaden to path-or-verdict; a capability-free filter (2026-07-31)
+
+The guard replays the failing sequence once, before filtering, and aborts if the system is unstable.
+Broadened from the approved "execution-path mismatch" to **path *or* verdict** divergence (amendment,
+2026-07-31): the replay runs anyway, so comparing the verdict — does it still `passed`-match and fail
+the same kind? — is free and strictly stronger. It catches a system that reproduces the same path but
+flips the outcome (a postcondition that fails once then passes). `passed` is compared to `passed`
+directly, not the derived `failure === null` (two fields that only happen to be coupled). Two mutants:
+disabling the guard kills both AC8 tests; narrowing to path-only keeps the path test green and turns
+the verdict test red — proof the two scenes are cleanly separated (Flaky diverges only in path,
+FlakyPost only in verdict) and the verdict clause is load-bearing.
+
+**The one AC1 exception.** An abandoned result is flagged `abandonedNonDeterministic` and the two AC8
+tests deliberately do *not* assert it still fails: the system is unstable, so no stable verdict
+exists. Recorded on AC1's traceability row and in the AC8 amendment. `executions` of an abandoned run
+is 0 — the replay is not a candidate execution (D007), a fixed one-run overhead outside the budget.
+
+**AC3 decomposed under pressure from AC8.** Adding the replay guard exposed that the old AC3 test
+fabricated an `$original` (`Cmd` always passes, but the record claimed a failure) — the guard
+correctly reported that as non-determinism and the test broke. The fix was not to patch AC3 into the
+AC8 commit but to split it first, in its own commit on the pre-AC8 shrinker (the bb432d1 discipline):
+extract the executed-subset filter into a public, pure `executedSubset(failing, original)` that takes
+no system and no `freshSut`, so it **structurally cannot** trial-and-error — a stronger catch than the
+old `freshSutCalls === 0` counter, and one that assumes nothing about AC8's replay. The counter was a
+proxy that AC8 would have re-entangled (its value shifts 0→1 with the replay); `executions === 0`
+stays the end-to-end claim, the structural filter test is the independent catch. This is maurice's
+"make the filter separately callable" alternative, chosen over "keep the counter at value 1" because
+the value-1 form both re-conflates and cannot be committed green on the pre-AC8 shrinker.

@@ -537,3 +537,155 @@ it('respects the budget: reaching the minimum within it is minimal, one short is
     expect($rerun->passed)->toBeFalse()
         ->and($rerunFailure->sameKindAs($originalFailure))->toBeTrue();
 })->group('SPEC-002');
+
+// --- AC8: non-determinism aborts shrinking. -------------------------------------------------------
+
+/** A counter shared by reference across a command and its (shallow) clones, so behaviour can differ
+ *  between the original run and the shrinker's replay. Deterministic from the test's view — it runs
+ *  0, 1, 2 in a fixed order — so the test is not flaky; unstable only from the shrinker's, which is
+ *  exactly the system non-determinism AC8 must detect (a deliberate R6 clash: the *system* lies,
+ *  not the model). */
+final class Counter
+{
+    public int $value = 0;
+}
+
+/**
+ * Non-deterministic in its PATH: the precondition holds only on the first check, so the command
+ * executes in the original run and is skipped on the replay — the execution path diverges.
+ *
+ * @implements Command<null, mixed, null>
+ */
+final class Flaky implements Command
+{
+    public function __construct(private Counter $counter) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return $this->counter->value++ === 0;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return true;
+    }
+
+    public function __toString(): string
+    {
+        return 'flaky';
+    }
+}
+
+/**
+ * Non-deterministic in its VERDICT, not its path: it always executes, but the postcondition fails on
+ * the first run and passes on the replay. The path is identical, only the outcome flips — the case a
+ * path-only check would miss.
+ *
+ * @implements Command<null, mixed, null>
+ */
+final class FlakyPost implements Command
+{
+    public function __construct(private Counter $counter) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $this->counter->value++ !== 0; // fails on the first run, passes after
+    }
+
+    public function __toString(): string
+    {
+        return 'flakypost';
+    }
+}
+
+/**
+ * Always fails its postcondition — a deterministic failure to anchor the sequence.
+ *
+ * @implements Command<null, mixed, null>
+ */
+final class FailCmd implements Command
+{
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return false;
+    }
+
+    public function __toString(): string
+    {
+        return 'fail';
+    }
+}
+
+it('aborts shrinking when the replay path diverges — non-determinism (SPEC-002 AC8)', function () {
+    $freshSut = fn (): stdClass => new stdClass;
+    // Flaky executes in the original run (counter 0) but is skipped on the replay (counter 1), so the
+    // execution path diverges. The shrinker must abort, not report a counterexample from an unstable
+    // run.
+    $failing = [new GeneratedValue(new Flaky(new Counter)), new GeneratedValue(new FailCmd)];
+    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+
+    $result = (new SequenceShrinker(new SequenceRunner))->shrink(
+        $failing, $original, Gen::constant(new FailCmd), $freshSut, null,
+    );
+
+    // Aborted: the original counterexample is returned unshrunk, flagged non-deterministic. The AC1
+    // invariant is deliberately NOT asserted here — the result is flagged unreliable, so "still fails
+    // the same way" cannot be guaranteed for an unstable system (the one exception to AC1).
+    expect($result->abandonedNonDeterministic)->toBeTrue()
+        ->and(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['flaky', 'fail']);
+})->group('SPEC-002');
+
+it('aborts when the replay verdict diverges though the path is identical (SPEC-002 AC8)', function () {
+    $freshSut = fn (): stdClass => new stdClass;
+    // FlakyPost always runs (path stable) but its postcondition fails on the first run and passes on
+    // the replay — the verdict flips. A path-only check would miss it; the broadened check catches it.
+    $failing = [new GeneratedValue(new FlakyPost(new Counter))];
+    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $gv) => $gv->value, $failing), $freshSut, null);
+
+    $result = (new SequenceShrinker(new SequenceRunner))->shrink(
+        $failing, $original, Gen::constant(new FailCmd), $freshSut, null,
+    );
+
+    expect($result->abandonedNonDeterministic)->toBeTrue()
+        ->and(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['flakypost']);
+})->group('SPEC-002');

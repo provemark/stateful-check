@@ -7,6 +7,7 @@
 | Approved   | maurice, 2026-07-30                               |
 | Amended    | maurice, 2026-07-30 — AC5 (empty-sequence probe) removed, D022. The empty sequence cannot fail in this model — the runner checks nothing at zero commands — so the probe is a guaranteed-useless execution and its "empty counterexample" branch is dead; the question it asked is answered by construction (the shrinker only receives a failing `RunResult`). The candidate families drop from three to two (structural, argument), the meta case is removed, and `shrunkOnce` goes with it (its only purpose was trying the probe once). |
 | Amended    | maurice, 2026-07-30 — `SequenceShrinker::shrink()` takes the original failing `RunResult`. It makes the shrinker a consumer of what already happened, not a rediscoverer: `$original->executed` filters non-executed commands with **zero** candidate runs (AC3), the execution path is AC8's replay baseline, and `$original->failure` is the `sameKindAs` baseline for the AC1 invariant. `count($original->executed)` must equal `count($failing)` (the same run) or `shrink()` throws a `LogicException` — a length mismatch would filter wrong positions and silently return a wrong counterexample. |
+| Amended    | maurice, 2026-07-31 — AC8 broadened from an execution-path mismatch to **path *or* verdict** divergence. The guard replays the failing sequence once anyway, so also comparing the verdict (does it still fail the same kind?) is free and strictly stronger: it catches a system that reproduces the same path but flips the outcome (e.g. a postcondition that passes on replay). This is the one exception to the AC1 invariant, recorded on AC1's traceability row: an abandoned, non-deterministic result is flagged unreliable and is not asserted to still fail. The replay is not a candidate execution (D007) and does not count toward the budget or `executions`. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -149,14 +150,21 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
   - Then the result equals that known minimal sequence exactly, compared by its
     string representation.
 
-- **AC8 — an execution-path mismatch aborts shrinking** *(required: error path,
+- **AC8 — a replay that diverges in path *or* verdict aborts shrinking** *(required: error path,
   R4)*
-  - Given a recorded execution path and a replay in which a command marked
-    not-executed does execute (or the reverse)
-  - When the mismatch is detected
-  - Then shrinking aborts, the original counterexample is returned unshrunk, and
-    the result reports that the system under test is not deterministic — never a
-    "minimal" sequence derived from unstable runs.
+  - Given a recorded run and a single replay of the same failing sequence, in
+    which either the execution path diverges (a command marked not-executed does
+    execute, or the reverse) *or* the verdict diverges (the replay does not
+    reproduce the same-kind failure — it passes, or fails differently) though the
+    path is identical
+  - When the divergence is detected
+  - Then shrinking aborts, the original counterexample is returned unshrunk and
+    unfiltered, and the result reports that the system under test is not
+    deterministic — never a "minimal" sequence derived from unstable runs. This
+    is the one exception to AC1: the returned sequence is *not* guaranteed to
+    still fail, because no stable verdict for it exists. The replay is not a
+    candidate execution (D007) — it does not count toward the budget or
+    `executions`.
 
 - **AC9 — shrinking respects the budget**
   - Given a budget of *n* candidate executions
@@ -299,13 +307,13 @@ least one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | cross-cutting invariant (R2) — asserted in every running shrinker test (so far "shrinks to a local minimum…", "does not drift…") and proven by AC7 | the R2 postcondition, not a distinct symbol |
+| AC1                  | cross-cutting invariant (R2) — asserted in every running shrinker test (so far "shrinks to a local minimum…", "does not drift…") and proven by AC7. **One exception (AC8):** a result flagged `abandonedNonDeterministic` is *not* asserted to still fail — the system is unstable, so no stable verdict exists; the two AC8 tests deliberately omit the invariant | the R2 postcondition, not a distinct symbol |
 | AC2                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "shrinks to a local minimum…" + "does not drift to a candidate that fails for a different reason…" + "fails loudly when the original run did not fail" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`, `::stillFails` |
-| AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "drops non-executed commands by reading the record…" + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` |
+| AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "filters the executed subset by reading the record, with no capacity to run a command" (the structural trial-and-error catch) + "drops non-executed commands without running a candidate" (the end-to-end claim, `executions === 0`) + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::executedSubset`, `::shrink` |
 | AC4                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "every structural candidate retains the last executed command" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::candidateReductions` |
 | AC5                  | removed (D022) — the empty-sequence probe's trigger is unreachable in this model | n/a |
 | AC6                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "clones a command between candidates, so its mutable state does not leak" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::stillFails` |
 | AC7                  | —                           | —                    |
-| AC8                  | —                           | —                    |
+| AC8                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "aborts shrinking when the replay path diverges — non-determinism" + "aborts when the replay verdict diverges though the path is identical" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink` (replay guard), `::replay`; `src/Shrinking/ShrinkResult.php` :: `$abandonedNonDeterministic` |
 | AC9                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "respects the budget: reaching the minimum within it is minimal, one short is budget-limited" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`; `src/Shrinking/ShrinkResult.php` :: `$budgetExhausted` |
 | AC10                 | `tests/Unit/FailureTest.php` (group `SPEC-002`) | `src/Failure.php` :: `Failure::sameKindAs` |
