@@ -1,10 +1,11 @@
 # Tutorial: testing a bank account
 
 This walks through a small example end to end — a bank account and its ledger —
-introducing every concept as it comes up, and then applies them to something more
-realistic: an LRU cache with a genuine ordering bug. By the end you will have a
-test that generates a hundred command sequences per run, catches a bug that only
-shows up after state accumulates, and shrinks it to the commands that matter.
+introducing every concept as it comes up, and then applies them to two more
+realistic systems: an LRU cache with a genuine ordering bug, and an order state
+machine driven by preconditions. By the end you will have a test that generates a
+hundred command sequences per run, catches a bug that only shows up after state
+accumulates, and shrinks it to the commands that matter.
 
 The snippets below are complete: assembled in order into one file (with a
 Composer autoloader), or dropped into a Pest test, they run against the engine as
@@ -537,6 +538,151 @@ put(a,5),get(c),put(b,9),get(b),get(a),get(c),get(a),put(c,9),get(a),put(b,9)
 The shrinker cut it to the five above and confirmed each is load-bearing: remove
 any one — the first `put`, the fill, the refreshing `get`, the evicting `put`, or
 the observing `get` — and the bug no longer reproduces.
+
+## Preconditions doing real work: a state machine
+
+The bank's one precondition just kept a balance from going negative. In a **state
+machine**, preconditions are the whole point: they encode which transitions are
+legal from which state, and the generator's random sequences become valid programs
+because the illegal steps are simply skipped.
+
+Take an order that moves `Pending → Paid → Shipped → Delivered`, and may be
+`Cancelled` while still `Pending` or `Paid`:
+
+```php
+enum Status
+{
+    case Pending;
+    case Paid;
+    case Shipped;
+    case Delivered;
+    case Cancelled;
+}
+```
+
+The system is an order whose methods change its status; the model tracks only that
+status, immutably:
+
+```php
+final class Order
+{
+    public Status $status = Status::Pending;
+
+    public function pay(): void     { $this->status = Status::Paid; }
+    public function ship(): void    { $this->status = Status::Shipped; }
+    public function deliver(): void { $this->status = Status::Delivered; }
+    public function cancel(): void  { $this->status = Status::Cancelled; }
+}
+
+final readonly class OrderModel
+{
+    public function __construct(public Status $status = Status::Pending) {}
+
+    public function withStatus(Status $status): self
+    {
+        return new self($status);
+    }
+}
+```
+
+Each command guards its transition with a precondition and, when it runs, moves the
+model to the new status. Here is `Pay` in full:
+
+```php
+/** @implements Command<OrderModel, Order, null> */
+final class Pay implements Command
+{
+    public function preCondition(mixed $model): bool
+    {
+        return $model->status === Status::Pending;   // you can only pay a pending order
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        $sut->pay();
+
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model->withStatus(Status::Paid);
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $sut->status === $model->status;
+    }
+
+    public function __toString(): string
+    {
+        return 'pay';
+    }
+}
+```
+
+`Ship`, `Deliver` and `Cancel` are the same four methods, differing only in their
+precondition and target status — which is exactly the transition table:
+
+| Command   | Precondition (status is…) | New status  |
+|-----------|---------------------------|-------------|
+| `pay`     | `Pending`                 | `Paid`      |
+| `ship`    | `Paid`                    | `Shipped`   |
+| `deliver` | `Shipped`                 | `Delivered` |
+| `cancel`  | `Pending` or `Paid`       | `Cancelled` |
+
+The property lists the four commands. There is no initial state to draw here — every
+order starts `Pending` — so `initial` is `Gen::constant(null)`, the way a property
+with no initial state says so:
+
+```php
+$result = (new StatefulProperty(
+    alphabet: [
+        Gen::constant(new Pay),
+        Gen::constant(new Ship),
+        Gen::constant(new Deliver),
+        Gen::constant(new Cancel),
+    ],
+    initial: Gen::constant(null),
+    setup: fn (mixed $none) => new Setup(model: new OrderModel, system: new Order),
+))->check();
+```
+
+Against a correct order this passes. Now plant a copy-paste bug — a `deliver()` that
+sets the status to `Shipped` instead of `Delivered`:
+
+```php
+public function deliver(): void
+{
+    $this->status = Status::Shipped;   // BUG: copy-pasted from ship()
+}
+```
+
+and it fails:
+
+```
+FAIL  seed=1 · initial=NULL · pay,ship,deliver
+```
+
+`initial=NULL` because there is no initial state; the counterexample is the shortest
+legal path that reaches a `deliver` — pay it, ship it, deliver it — and the delivered
+order is still `Shipped`.
+
+### Where the preconditions did their work
+
+The sequence that actually failed during generation was ten random transitions:
+
+```
+ship(skipped),pay,pay(skipped),ship,pay(skipped),pay(skipped),ship(skipped),cancel(skipped),cancel(skipped),deliver
+```
+
+Seven of the ten were skipped — a `ship` while still `Pending`, a second `pay` on an
+already-paid order, a `cancel` on a shipped one. Each was drawn at random, its
+precondition was false against the current state, so the runner skipped it and moved
+on. What executed was the legal path `pay, ship, deliver`, and that is what the
+shrinker keeps: it reduces over the commands that actually *ran*, so a shortened
+sequence stays a legal program by construction. The counterexample is that path and
+nothing else.
 
 ## Two results you should recognise
 
