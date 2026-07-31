@@ -134,6 +134,18 @@ If the model needs the complexity of the system, the bug is written twice. Model
 only what the system under test can actually expose; modelling unobservable
 state produces assertions that quietly pass.
 
+`nextState` being **pure** — returning a new model rather than mutating the one
+passed in — carries a second, independent load beyond R6's oracle argument, and
+neither may be relaxed without the other. The shrinker (and SPEC-005) reuses one
+`$initialModel` **value** across every candidate while `freshSut` is a factory that
+builds a fresh system per candidate. That asymmetry is sound only because
+`nextState` does not mutate the incoming model: a `nextState` that mutated it would
+leak model state between candidates — the R9b leak one layer up — silently, with no
+error, producing a wrong counterexample. So purity is both what keeps the model an
+independent oracle and the precondition under which sharing the initial model across
+shrink candidates is correct. Recorded here and in SPEC-005 so relaxing R6 later
+cannot quietly break shrinking.
+
 **R7 — No runtime dependencies.**
 The package owns its generation (SPEC-003), built on PHP 8.2's Random extension.
 `require` contains PHP and nothing else. This is not purity for its own sake: an
