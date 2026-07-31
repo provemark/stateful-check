@@ -1590,3 +1590,20 @@ case needed it) and **command choice is not shrunk** (a counterexample may hold 
 a simpler one would also fail — the SPEC-003 AC5 gap, the kind of thing a user mistakes for a bug in the
 package). With the README honest, ROADMAP §6 is closed: both dogfood suites pass, all v0.1 specs are
 `implemented`, and the limitations match what was built.
+
+## Step 55 — a tutorial, and every snippet run before it shipped (2026-07-31)
+
+Added `docs/tutorial.md`: a bank-account walkthrough that introduces every concept in order (model as
+oracle, the four command methods, the Outcome, precondition-as-skip, generation with a drawn initial
+state, the seed, shrinking, reproduction, the Pest wiring) and ends on a planted bug — a hidden balance
+cap — to show a real shrunk counterexample.
+
+Two things held to the session's standard. First, every code block was assembled verbatim into one file
+and run against the engine before shipping (`PASS seed=12345`), and the failure output is the real
+string the engine printed (`seed=12345 · initial=949 · deposit(63)`), including the *unshrunk* sequence
+(`deposit(63),withdraw(56)`) obtained by replaying generation — so the "shrinking removed the withdraw"
+claim is observed, not asserted. Second, the first draft said the runnable version "lives in
+`examples/`" — it does not; that was a fresh instance of the plausible-but-false claim the whole session
+has been catching, and it was removed before commit. The bug example doubles as a live demonstration of
+two README limitations: `deposit(63)` is not shrunk to `deposit(52)` (no argument shrinking) and
+`initial=949` is held fixed (not minimised).

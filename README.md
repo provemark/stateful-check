@@ -45,6 +45,9 @@ every step; the shrinker reduces a twelve-command failure to the two commands
 that actually matter. The initial state is generated as well, so the property is
 checked across a *space* of starting points rather than one fixed setup.
 
+A step-by-step walkthrough — every concept, building a real test, and reading a
+shrunk counterexample — is in [docs/tutorial.md](docs/tutorial.md).
+
 ## What it does not do
 
 - **No parallel execution and no automatic race detection.** PHP is
