@@ -476,3 +476,69 @@ it('shrinks the first failing sequence to a counterexample, with a fresh system 
     // extra and shared that one system across candidates would not match.
     expect($setups->count)->toBe(2 + $result->executions);
 })->group('SPEC-005');
+
+/**
+ * Always fails, carrying a drawn integer. SPEC-002 shrinks the sequence, not the argument, so the
+ * drawn value survives into the counterexample — which makes the counterexample vary with the seed,
+ * so a re-draw anywhere in the wiring becomes visible.
+ *
+ * @implements Command<null, null, null>
+ */
+final class TaggedFailure implements Command
+{
+    public function __construct(private int $tag) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return false;
+    }
+
+    public function __toString(): string
+    {
+        return "tf({$this->tag})";
+    }
+}
+
+it('reproduces the same counterexample from the same seed — the wiring stays deterministic (SPEC-005 AC2/AC3)', function () {
+    $counterexampleWith = function (int $seed): array {
+        $result = (new StatefulProperty(
+            alphabet: [Gen::map(fn (int $n): TaggedFailure => new TaggedFailure($n), Gen::integers(0, 1_000_000))],
+            setup: fn (mixed $initial): Setup => new Setup(model: null, system: null),
+            initial: Gen::constant(null),
+            maxLength: 4,
+            runs: 1,
+        ))->check(seed: $seed);
+
+        return array_map(fn (Command $c): string => (string) $c, $result->counterexample);
+    };
+
+    // Same seed → the identical counterexample, end to end (AC3's forward-referenced half). This guards
+    // not the determinism of generation (AC3) or of the shrinker (SPEC-002 R4) — those are tested — but
+    // of the WIRING between them: the AC3 requirement that the seed→outcome chain stay free of
+    // non-deterministic sources (unordered iteration, wall-clock time, spl_object_id) has no other
+    // test, and this is it. It falls the moment check() introduces such a source — the drawn integer in
+    // the counterexample makes any re-draw visible. There is deliberately NO mutant: a different seed
+    // may legitimately shrink to the same counterexample (so "different seed → different" is unsound),
+    // and a seed-ignoring impl uses the same seed both times and passes here (it is caught at AC3
+    // instead). The test's strength is derived, resting on AC3 and SPEC-002; its job is precisely to
+    // guard the wiring.
+    $first = $counterexampleWith(7);
+
+    expect($first)->not->toBeEmpty()          // a real counterexample, so the comparison is not [] === []
+        ->and($counterexampleWith(7))->toBe($first);
+})->group('SPEC-005');

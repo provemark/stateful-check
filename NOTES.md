@@ -1395,3 +1395,27 @@ yields, for choosing a test's observation: ask not only "does this catch the fau
 measuring what I mean when layers are added below it". A proxy that happens to equal the real quantity
 today drifts the moment a new layer shares the proxy's cause. Revised separately, before AC2, and shown
 to still bite (a continue-past-failure mutant makes the initial-draw count 5, not 2).
+
+## Step 47 — SPEC-005 AC2-2b: reproducing the counterexample, and a test with no honest mutant (2026-07-31)
+
+AC3's forward-referenced half: same seed → same counterexample. Green on arrival, and — unlike AC3's
+generation test — **there is deliberately no mutant**, because none would prove anything:
+
+- "Different seed → different counterexample" is *unsound*, not merely weak: two seeds can legitimately
+  shrink to the same minimal counterexample — that is what shrinking does. Asserting it would be false.
+- A seed-ignoring impl (`Source::seeded(0)`) uses the same seed for both calls, so it *passes* the
+  reproduction assertion. It is caught at AC3 (the generation test's different-seed side), not here.
+- The shrinker is deterministic by construction (no randomness to mutate).
+
+So reproducibility of the counterexample follows from AC3 (generation reproduces) + SPEC-002 R4 (the
+shrinker is deterministic). Constructing a mutant that reddens without discriminating would be the
+`mt_rand` refusal at AC4 again — a red that proves nothing.
+
+**What the test IS, precisely (maurice's framing):** the *composition* is the failure mode. AC3 covers
+generation, SPEC-002 covers the shrinker, but nothing covered that the wiring between them in `check()`
+passes determinism through — exactly the AC3 chain requirement (no unordered iteration, no wall-clock
+time, no `spl_object_id`), which had no test guarding it. This test is that guard: it falls the moment
+someone introduces a non-deterministic source in `check()`, and the drawn integer carried in the
+counterexample (`TaggedFailure`, whose argument SPEC-002 does not shrink) makes any re-draw visible. Its
+strength is derived — resting on AC3 and SPEC-002 — and it is labelled so in the test: not a weak test
+with an excuse, but a test with a precisely delimited task.
