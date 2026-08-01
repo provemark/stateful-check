@@ -9,6 +9,7 @@
 | Amended    | maurice, 2026-07-30 — `SequenceShrinker::shrink()` takes the original failing `RunResult`. It makes the shrinker a consumer of what already happened, not a rediscoverer: `$original->executed` filters non-executed commands with **zero** candidate runs (AC3), the execution path is AC8's replay baseline, and `$original->failure` is the `sameKindAs` baseline for the AC1 invariant. `count($original->executed)` must equal `count($failing)` (the same run) or `shrink()` throws a `LogicException` — a length mismatch would filter wrong positions and silently return a wrong counterexample. |
 | Amended    | maurice, 2026-07-31 — AC8 broadened from an execution-path mismatch to **path *or* verdict** divergence. The guard replays the failing sequence once anyway, so also comparing the verdict (does it still fail the same kind?) is free and strictly stronger: it catches a system that reproduces the same path but flips the outcome (e.g. a postcondition that passes on replay). This is the one exception to the AC1 invariant, recorded on AC1's traceability row: an abandoned, non-deterministic result is flagged unreliable and is not asserted to still fail. The replay is not a candidate execution (D007) and does not count toward the budget or `executions`. |
 | Amended    | maurice, 2026-07-31 — **retraction: the per-command argument family and the whole layer serving it are removed from v0.1.** The shrinker now takes a bare `list<Command>`; the earlier amendments adding the `$alphabet` generator param and the `GeneratedValue` wrapper input are withdrawn, and D021 (the wrapper's command/context pairing) is retracted. No v0.1 case needs argument shrinking — the AC7 meta-suite plants an argument-free bug — so carrying the layer was speculative generality (§4). The AC7 traceability check surfaced that D021's "new wrapper" was never even implemented (`replay()` runs bare clones). A later spec re-adds argument shrinking with its consumer. Same shape as D010 (`fork()`). |
+| Amended    | maurice, 2026-08-01 — **AC3 strengthened, and the argument family re-added by SPEC-006** (which the 2026-07-31 retraction deferred to "a later spec"). AC3's guarantee now covers the *returned* result, not only the up-front filter: the counterexample is the executed subset of the **finally accepted candidate**, enforced by re-filtering every accepted candidate through its own replay's executed set. This closes a gap the "no-op drop" argument missed — a reduction can move the failure earlier and leave the retained last command (AC4) unexecuted. Its trigger proved **unreachable** under the two present choices (structure-first family order; `sameKindAs` matches on command *class*), so the re-filter is **unconditional hardening** and its guard is a **tripwire** (SPEC-006 AC5), not a red-first test here. AC2's "local minimum" is extended by SPEC-006 AC3 to "no single structural *or* argument reduction still fails". Details, and the argument family's own ACs, live in SPEC-006. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -103,6 +104,9 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
   - When any single further reduction candidate is generated from it
   - Then every such candidate passes. No single additional reduction step still
     fails.
+  - *Extended by SPEC-006 AC3 (2026-08-01):* once the argument family is present, "local
+    minimum" means "no single structural **or** argument reduction still fails". This
+    structural-only statement is the v0.1 base SPEC-006 AC3 builds on; the two move together.
 
 - **AC3 — commands that did not execute are dropped** *(R1)*
   - Given a failing run in which some commands were skipped (precondition false)
@@ -114,6 +118,16 @@ path), R8 (planted-bug meta-tests), R9 (clone between candidates).
     distinct from the later reduction loop (AC2 onward), which does run candidates. The
     two must not be conflated: the drop's zero executions are the filter's, not the
     whole shrink's.
+  - *Strengthened by SPEC-006 (2026-08-01): the guarantee holds for the **returned** result,
+    not the up-front filter alone.* A reduction can move the failure earlier and leave the
+    retained last command (AC4) unexecuted in that candidate's replay — which the up-front
+    filter, reading only `$original->executed`, never sees. So every **accepted** candidate is
+    re-filtered through its own replay's executed set, and the returned counterexample is the
+    executed subset of the sequence actually returned. The trigger for that gap proved
+    unreachable under the present family order and class-granular `sameKindAs` (SPEC-006 AC5),
+    so the re-filter is unconditional hardening and its guard is a **tripwire** in SPEC-006 AC5
+    — this AC's returned-result guarantee is therefore traced to a SPEC-006 test, not to a
+    missing row here.
 
 - **AC4 — the last executed command is always retained**
   - Given any structural reduction candidate
@@ -297,7 +311,7 @@ least one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | cross-cutting invariant (R2). Its two halves are proven separately: the **still-fails** half (`passed === false`) by AC7's meta-case (a shrinker that over-reduced to a passing sequence breaks it) and by every running shrinker test; the **`sameKindAs` identity** half by "does not drift to a candidate that fails for a different reason" (mutant-protected — dropping `sameKindAs` from the accept-condition breaks exactly that test, since `Prime`/`Blow` there can drift to an `UnexpectedException`). AC7's system has one failure kind, so its `sameKindAs` assertion cannot bite there — it documents the invariant, the drift test proves it. **One exception (AC8):** a result flagged `abandonedNonDeterministic` is *not* asserted to still fail — the system is unstable, so no stable verdict exists; the two AC8 tests deliberately omit the invariant | the R2 postcondition, not a distinct symbol |
 | AC2                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "shrinks to a local minimum…" (also asserts `ShrinkResult::$originalLength` — the pre-shrink length, distinct from the shrunk `commands`) + "does not drift to a candidate that fails for a different reason…" + "fails loudly when the original run did not fail" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::shrink`, `::stillFails`; `src/Shrinking/ShrinkResult.php` :: `$originalLength` |
-| AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "filters the executed subset by reading the record, with no capacity to run a command" (the structural trial-and-error catch) + "drops non-executed commands without running a candidate" (the end-to-end claim, `executions === 0`) + "fails loudly when the executed record does not match…" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::executedSubset`, `::shrink` |
+| AC3                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "filters the executed subset by reading the record, with no capacity to run a command" (the structural trial-and-error catch) + "drops non-executed commands without running a candidate" (the end-to-end claim, `executions === 0`) + "fails loudly when the executed record does not match…" (SPEC-002). **Returned-result guarantee (2026-08-01 amendment):** `tests/Meta/ArgumentShrinkExecutedSubsetTest.php` (SPEC-006 AC5 tripwire) — traced to SPEC-006, not a missing row, because the re-filter that makes the *returned* result executed-only is hardening whose trigger is unreachable, so it has no red-first test here | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::executedSubset`, `::shrink` (the accept loop re-filters each accepted candidate; `::stillFails` returns the `RunResult`) |
 | AC4                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "every structural candidate retains the last executed command" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::candidateReductions` |
 | AC5                  | removed (D022) — the empty-sequence probe's trigger is unreachable in this model | n/a |
 | AC6                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` :: "clones a command between candidates, so its mutable state does not leak" (SPEC-002) | `src/Shrinking/SequenceShrinker.php` :: `SequenceShrinker::replay` (the shallow clone before each run) |
