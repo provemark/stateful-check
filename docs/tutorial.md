@@ -269,7 +269,7 @@ balance near the cap first — which is exactly what generating sequences over a
 space of starting balances does. Run it, and it fails:
 
 ```
-FAIL  seed=12345 · initial=949 · deposit(63)
+FAIL  seed=12345 · initial=949 · deposit(52)
 ```
 
 Read the counterexample string left to right:
@@ -278,32 +278,33 @@ Read the counterexample string left to right:
   `->check(seed: 12345)` and you get this identical failure.
 - `initial=949` — the drawn starting balance. The bug needs a high opening balance
   to be near the cap; the generator found one.
-- `deposit(63)` — the one command that triggers it. 949 + 63 = 1012, but the capped
-  account stops at 1000, so the model and the system disagree.
+- `deposit(52)` — the one command that triggers it, at its smallest triggering value.
+  949 + 52 = 1001, over the 1000 cap, so the model and the system disagree; 949 + 51
+  would land exactly on 1000 and pass.
 
 ## What shrinking did
 
-The sequence that actually failed during generation was longer:
+The sequence that actually failed during generation was longer, and its value larger:
 
 ```
 deposit(63), withdraw(56)
 ```
 
-The `withdraw(56)` had nothing to do with the bug — the disagreement already
-happened at `deposit(63)`. The shrinker removed it, leaving the shortest sequence
-that still fails: `deposit(63)` alone. That is the whole value of shrinking — you
-are handed the one command that matters, not the random walk that happened to hit it.
+Two things were stripped away. The `withdraw(56)` never ran — the disagreement
+already happened at the deposit, so execution stopped there — and it drops out. And
+`deposit(63)` is reduced to `deposit(52)`: the shrinker tries smaller deposits and
+keeps the smallest that still overflows the cap (52 does; 51 lands on 1000 and
+passes). That is the whole value of shrinking — you are handed the one command that
+matters, at the one value that matters, not the random walk and the arbitrary amount
+that happened to hit it.
 
-Two honest limits are visible right in this counterexample:
+One honest limit is still visible right in this counterexample:
 
-- `deposit(63)` is *not* reduced to `deposit(52)`, even though depositing 52 into a
-  949 balance would overflow the cap just as well. The shrinker shortens sequences
-  but does not simplify the numbers inside a command.
 - `initial=949` is held fixed while shrinking, not minimised. The reported starting
-  balance is the one that was drawn, not the smallest one that would fail.
-
-Both are deliberate; see the [limitations](../README.md#what-it-does-not-do) in the
-README.
+  balance is the one that was drawn, not the smallest that would fail — a deliberate
+  choice. The [limitations](../README.md#what-it-does-not-do) in the README list it,
+  and the sharper one next to it: the shrinker minimises *values* but never replaces a
+  command with a simpler one from the alphabet.
 
 ## A more realistic example: an LRU cache
 
@@ -512,17 +513,17 @@ public function get(string $key): ?int
 and one run reports:
 
 ```
-FAIL  seed=5 · initial=2 · put(a,5),put(b,9),get(a),put(c,9),get(a)
+FAIL  seed=5 · initial=2 · put(a,1),put(b,1),get(a),put(c,1),get(a)
 ```
 
 Read that as a story, with a cache of capacity 2:
 
-1. `put(a,5)`, `put(b,9)` — the cache is now full: `a`, `b`.
+1. `put(a,1)`, `put(b,1)` — the cache is now full: `a`, `b`.
 2. `get(a)` — reading `a` *should* make it most-recently-used, leaving `b` next to
-   go. The buggy cache returns `5` but leaves the order untouched.
-3. `put(c,9)` — the cache is full, so something is evicted. The correct cache drops
+   go. The buggy cache returns `1` but leaves the order untouched.
+3. `put(c,1)` — the cache is full, so something is evicted. The correct cache drops
    `b`; the buggy one still thinks `a` is oldest and drops `a`.
-4. `get(a)` — the model says `a` is still there, worth `5`. The buggy cache evicted
+4. `get(a)` — the model says `a` is still there, worth `1`. The buggy cache evicted
    it and returns `null`. They disagree, and the run stops.
 
 No single command is wrong on its own — the bug lives entirely in the *ordering*,
@@ -537,7 +538,10 @@ put(a,5),get(c),put(b,9),get(b),get(a),get(c),get(a),put(c,9),get(a),put(b,9)
 
 The shrinker cut it to the five above and confirmed each is load-bearing: remove
 any one — the first `put`, the fill, the refreshing `get`, the evicting `put`, or
-the observing `get` — and the bug no longer reproduces.
+the observing `get` — and the bug no longer reproduces. It also shrank the stored
+values from `5`, `9`, `9` down to `1`: the bug is about *which key* is evicted, not
+what it holds, so the values were incidentally large — and the argument family drove
+them to the origin while leaving the keys, which do matter, alone.
 
 ## Preconditions doing real work: a state machine
 

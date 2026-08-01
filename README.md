@@ -53,21 +53,18 @@ shrunk counterexample — is in [docs/tutorial.md](docs/tutorial.md).
 - **No parallel execution and no automatic race detection.** PHP is
   share-nothing and request-scoped. The headline feature of the Erlang original
   is not available here and will not be claimed.
-- **No global minimum.** Shrinking returns a documented local minimum: no single
-  further reduction step both stays valid and still fails.
-- **No argument shrinking.** Shrinking makes a failing *sequence* shorter, but it
-  does not simplify the values inside a command — a `Deposit(9999)` in a
-  counterexample stays as it was drawn, even if `Deposit(1)` would fail just as
-  well. fast-check and Hypothesis shrink both structure and values;
-  this shrinks structure only. The value-shrinking layer was deliberately retracted
-  when no planted-bug case needed it, rather than carried as speculative generality;
-  a later version can add it behind the same interface.
-- **Command choice is not shrunk.** The shrinker drops and reorders commands, but
-  never replaces one with a simpler command from the alphabet. So a counterexample
-  may contain a more complex command where a simpler one would have failed too: the
-  minimum is over *which commands ran and in what order*, not over *which command
-  each step could have been*. It is a known coverage gap, called out here because it
-  can read as a surprising counterexample rather than a limitation.
+- **A local minimum, not a global one.** Shrinking returns a documented local
+  minimum: no single further reduction — dropping a command *or* shrinking a value —
+  both stays valid and still fails. It shortens the sequence **and** simplifies the
+  values inside each command; it does not search exhaustively for a smaller
+  counterexample.
+- **Command choice is not shrunk.** The shrinker drops commands and shrinks their
+  arguments, but never replaces a command with a *different, simpler* one from the
+  alphabet. So the minimum is over *which commands ran, in what order, and with what
+  argument values* — but not over *which command each step could have been*. A
+  counterexample may keep a `Sign` where a `Read` would have failed too; it is a
+  known coverage gap, called out because it can read as a surprising counterexample
+  rather than a limitation.
 - **No general-purpose generator library.** Generation is owned — seeded on PHP
   8.2's Random extension — but only the combinators this needs exist. It is not a
   replacement for a full property-testing toolkit.
