@@ -5,7 +5,8 @@
 | Status     | draft                                             |
 | Author     | maurice                                           |
 | Approved   | — (draft)                                         |
-| Supersedes | — (extends SPEC-002; revisits its shrinker input and its local-minimum guarantee) |
+| Supersedes | —                                                 |
+| Amends     | SPEC-002 (AC2's local-minimum wording; AC3 clarified — the *returned* result is executed-only via the reduction loop, not the up-front filter alone) and SPEC-005 (`StatefulProperty` retains `GeneratedValue` wrappers and passes the alphabet to the shrinker). Both are `implemented`, so these are formal amendments approved together with this spec. |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
 > `implemented` (Traceability filled). No implementation code while `draft`.
@@ -16,41 +17,43 @@
 
 The shrinker (SPEC-002) makes a failing *sequence* shorter — it drops commands that
 did not matter — but never simplifies the *values inside* a command. A counterexample
-keeps `Deposit(9999)` where `Deposit(1)` would have failed just as well, and reports
-`initial=949` where a smaller opening balance would do. The tutorial says this in so
-many words (`docs/tutorial.md`), and the README lists it first under limitations: it
-is the single thing a reader coming from fast-check or Hypothesis expects and does
-not find.
+keeps `Deposit(9999)` where `Deposit(1)` would have failed just as well.
 
-SPEC-002 retracted an earlier argument-shrinking layer (2026-07-31) for a stated
-reason: "no v0.1 case needs it — building it now would be speculative generality
-(§4). A later spec adds it together with its consumer." **This is that spec, and the
-consumer now exists**: the two dogfood examples and the tutorial each carry a
-counterexample whose argument the tool cannot minimise, which is a visible, honest
-gap rather than a hypothetical one.
+The consumer this needs already exists, independently of this spec: the two dogfood
+suites and the tutorial each produce a real counterexample whose argument the tool
+cannot minimise — `docs/tutorial.md` shows `deposit(63)` un-reduced and says so, and
+the README lists it first under limitations. That is the justification, and it is
+pre-existing: those counterexamples exist whether or not this spec is written.
+
+Kept deliberately apart from that: the R8 planted-bug meta-test (AC6) is the
+feature's *test*, not evidence for it. A bug written specifically to need argument
+shrinking would be circular justification against §4 — the feature proving its own
+necessity. The need is the real, already-shipped counterexamples above; the meta-test
+only verifies the feature once the need has justified building it.
+
+SPEC-002 retracted an earlier argument-shrinking layer (2026-07-31) with a stated
+promise: "no v0.1 case needs it … a later spec adds it together with its consumer."
+This is that spec.
 
 The expensive half is already built. Per SPEC-003 the generation layer carries
 value-level shrinking: `Generator::shrink(GeneratedValue): iterable` yields smaller
 alternatives closest-to-origin first, `IntegersGenerator::shrink` does binary
 reduction toward the origin, and `AlphabetGenerator::shrink` already delegates a
-command's argument shrinking to the branch generator that produced it, using the
-opaque `GeneratedValue::$context`. What SPEC-002 removed was only the *consumer* of
-that machinery: the `GeneratedValue<Command>` wrapper as the shrinker's input, the
-`$alphabet` generator parameter, the per-command family, and the matched-pair
-invariant D021 (which, on the record, was never even implemented). This spec restores
-the consumer, not the algorithm.
+command's argument shrinking to the branch generator that produced it, via the opaque
+`GeneratedValue::$context`. What SPEC-002 removed was only the *consumer* of that
+machinery: the `GeneratedValue<Command>` wrapper as the shrinker's input, the
+`$alphabet` generator parameter, and the per-command family. This spec restores the
+consumer, not the algorithm. D003 (external shrinker) is unchanged — the shrinker
+stays external; it just receives the context again.
 
 Governing rules: R1 (shrinking operates on the executed subset; sound only while
 commands are independent, R9a), R2 (never return a passing sequence), R3 (a documented
 local minimum — whose statement this spec *changes*), R8 (every shrinking behaviour
-needs a planted-bug meta-test), R9b (commands cloned per candidate), R10 (a
-generic-typed contract proven heterogeneous before approval), R11 (an AC proven
-fulfillable before approval), §4 (no speculative generality — arrives with its
-consumer). Prior art: `docs/prior-art.md` on fast-check's arbitrary-integrated
-shrinking and its `canShrinkWithoutContext = false` — argument shrinking is impossible
-without the surviving generation context, which is exactly what the external shrinker
-gave up and this spec threads back in. D003 (external shrinker) is unchanged: the
-shrinker stays external; it just receives the context again.
+needs a planted-bug meta-test), R9b (commands cloned per candidate), §4 (no speculative
+generality — arrives with its consumer). Prior art: `docs/prior-art.md` on fast-check's
+arbitrary-integrated shrinking and its `canShrinkWithoutContext = false` — argument
+shrinking is impossible without the surviving generation context, which the external
+shrinker gave up and this spec threads back in.
 
 ## Scope
 
@@ -58,35 +61,63 @@ shrinker stays external; it just receives the context again.
 
 - Threading the generation context back into the shrinker: the failing sequence
   arrives as `list<GeneratedValue<Command>>` (the wrapper restored), and the shrinker
-  is constructed with the alphabet `Generator` that produced the commands.
+  is constructed with the alphabet `Generator` that produced the commands. (The R10
+  gate is already met — a heterogeneous `list<GeneratedValue<Command<M, S, mixed>>>`
+  type-checks at PHPStan max, verified 2026-08-01.)
 - A second candidate family — the **argument family**: for each executed position *i*,
   ask the alphabet to `shrink()` the `GeneratedValue` that produced `sequence[i]`, and
-  yield a candidate with position *i* replaced by each shrunk command, every other
-  position unchanged. Length-preserving, closest-to-origin first, finite.
-- The matched-pair invariant (a D021 successor): a command and the context that
-  produced it travel together; the command is authoritative, and a candidate whose
-  shrunk `GeneratedValue` yields a command of a different class than the position it
-  replaces is a mismatch and aborts loudly (never a silently-wrong counterexample).
-- Restating the local-minimum guarantee (R3) to cover both families: "no single
-  structural **or** argument reduction still fails." Propagating that restatement to
-  the README, the tutorial, and `ShrinkResult`'s rendering.
-- Termination with a length-preserving family present, resting on the existing budget
-  (SPEC-002 AC9) and the finiteness of each `Generator::shrink` enumeration.
-- A `tests/Meta/` planted-bug test that asserts an exact minimal **argument value**
-  (R8) — today's meta-suite (SPEC-002 AC7) plants only an argument-free bug.
+  yield a candidate with position *i* replaced by each shrunk `GeneratedValue`, every
+  other position unchanged. Length-preserving, closest-to-origin first, finite.
+- **Command/context coupling by construction** (this replaces the retracted D021's
+  runtime "matched-pair guard"). Each argument candidate is a *whole* `GeneratedValue`
+  taken straight from `alphabet->shrink()`, which produces the command and its context
+  together; the shrinker never re-pairs a command with a foreign context. So the
+  coupling holds by construction and needs no runtime guard — the honest position,
+  recorded so no future reader reintroduces a guard that checks nothing (D021's own
+  failure mode).
+- A `tests/Meta/` planted-bug test asserting an exact minimal **argument value** (R8) —
+  today's meta-suite (SPEC-002 AC7) plants only an argument-free bug.
+- **Cross-spec amendments, delivered here:**
+  - *SPEC-002.* AC2's local-minimum wording is superseded by AC3 below. AC3 of SPEC-002
+    is clarified: the *returned* counterexample is executed-only via the reduction loop
+    (a skipped command is a no-op drop that always reproduces, so a local minimum can
+    hold none), not the up-front filter alone — and a test pins it. This is a general
+    shrinker property, not argument-specific (see the code finding in Open questions),
+    so it is owned by SPEC-002, and SPEC-006 only relies on it.
+  - *SPEC-005.* `StatefulProperty` stops unwrapping the drawn `GeneratedValue<Command>`
+    on failure; it retains the wrappers and hands them, plus the alphabet, to the shrinker.
+- **Migrating the existing shrinker tests** to the wrapped input: `SequenceShrinkerTest`
+  (11) and `OrderDependentShrinkTest` (1) call `shrink()` with bare command lists, and
+  the SPEC-005 `StatefulPropertyTest` cases that build failing sequences shift at the
+  layer boundary. This is not mechanical — each sequence must be wrapped in
+  `GeneratedValue`s carrying a real (or deliberately empty) context — and is likely the
+  single largest piece of work in the spec. Called out in scope so it is estimated, not
+  discovered.
 
 **Out of scope** (each needs its own spec before it may be built)
 
 - Simplifying the branch **choice** — replacing a command with a *different* alphabet
-  entry. Argument shrinking simplifies values *within* the chosen branch; the choice
-  is still shrunk by no layer (SPEC-003 AC5's documented gap; SPEC-002 restates it).
-- Shrinking the drawn **initial state**. The initial is held fixed while shrinking
-  (SPEC-005 AC8), so `initial=949` stays as drawn. Minimising it is a separate change
-  with its own risks (it re-runs the whole sequence per candidate) and its own spec.
+  entry. Argument shrinking simplifies values *within* the chosen branch; the choice is
+  still shrunk by no layer (SPEC-003 AC5's documented gap; SPEC-002 restates it).
+- Shrinking the drawn **initial state**. It is held fixed while shrinking (SPEC-005 AC8),
+  so `initial=949` stays as drawn. Minimising it re-runs the whole sequence per candidate
+  and is a separate change with its own spec.
 - Symbolic results and any re-validation of candidates against the model (R1, R9a).
   Argument shrinking keeps commands independent: it changes a command's own arguments,
   never makes one depend on another's result.
 - Re-ordering commands (SPEC-002 keeps deletion-only).
+
+## Design decision — family ordering (structural first)
+
+Resolved now, because AC3's minimum is *defined relative to the order the loop runs the
+families*. The two families share SPEC-002's existing restart loop: on every accepted
+reduction, generation restarts from the reduced sequence. Structural candidates are
+offered first, argument candidates second. With the restart loop this is effectively
+interleaving with structural priority, and it is the cheaper order: every accepted
+structural drop removes a position, shrinking the set of positions the argument family
+must then consider. Reducing values inside a command that is about to be deleted is
+wasted work; deleting first avoids it. The alternative (arguments first) would minimise
+values on commands the structural family then throws away.
 
 ## Behavior
 
@@ -104,32 +135,34 @@ shrinker stays external; it just receives the context again.
     one position**, and the replacements are those of `alphabet->shrink(value)` —
     closest-to-origin first and finite. No candidate reduces two positions at once.
 
-- **AC3 — combined local minimum** *(R3, restated; supersedes SPEC-002 AC2's statement)*
+- **AC3 — combined local minimum, stated everywhere** *(R3, restated; supersedes SPEC-002
+  AC2's wording)*
   - Given a fully shrunk sequence
   - When any single further reduction — structural drop **or** argument reduction — is
     generated from it
-  - Then every such candidate passes. The guarantee is now "no single structural or
-    argument reduction still fails"; the words "local minimum" mean this and no more.
+  - Then every such candidate passes: "no single structural or argument reduction still
+    fails", and "local minimum" means exactly this. The restated guarantee and **every
+    place that states it** move together — the README limitations, `docs/tutorial.md`
+    (the argument-shrinking limitation and the "held fixed / not minimised" notes), and
+    `ShrinkResult` rendering — so no doc claims the old, narrower minimum. (The doc
+    propagation is a deliverable of this AC, not a separate un-owned scope item.)
 
 - **AC4 — termination with a length-preserving family** *(the central correctness risk)*
   - Given a sequence in which every executed position offers argument reductions, so the
     argument family never shortens the sequence
   - When shrinking runs
-  - Then it terminates — bounded by the budget (SPEC-002 AC9) and, within budget, by the
-    finiteness of each `Generator::shrink` enumeration and the origin-ward direction of
-    reduction (an accepted argument reduction is strictly closer to the origin, so no
-    position can be reduced forever). No infinite loop, with or without the budget biting.
+  - Then it terminates, on a **lexicographic** measure that strictly decreases on every
+    accepted candidate: first the length (structural drops lower it), then — at equal
+    length — the sum over positions of each value's distance to its origin (argument
+    reductions lower it, since `shrink()` only yields origin-ward values). The
+    non-obvious step the measure needs: **length can never grow.** Non-executed commands
+    are filtered out at the start and never reintroduced, and neither family adds a
+    position — structural only drops, argument only replaces one position in place. So
+    the measure is bounded below and cannot cycle, and termination does not rest on the
+    budget alone (the budget is the bound for *expensive* systems, AC9 of SPEC-002, not
+    the reason the loop halts).
 
-- **AC5 — an accepted candidate is re-filtered to what actually ran** *(R1 preserved)*
-  - Given an argument reduction that changes a command's value such that a later command's
-    precondition flips (a position that ran now skips, or one that skipped now runs)
-  - When the candidate is replayed against a fresh system
-  - Then the retained representation is the executed subset of **that replay**, not of the
-    parent — so the counterexample is always the executed subset of the sequence actually
-    returned. (This is how deletion already stays legal, R1; the argument family must obey
-    the same rule rather than assume the executed set is fixed.)
-
-- **AC6 — a context the alphabet cannot shrink, or a length mismatch, fails safely**
+- **AC5 — a context the alphabet cannot shrink, or a length mismatch, fails safely**
   *(required: error / malformed-input path)*
   - Given either (a) a position whose `GeneratedValue` the alphabet yields no shrinks for
     (a value already at the origin, or a command with no reducible argument), or (b) a
@@ -137,10 +170,14 @@ shrinker stays external; it just receives the context again.
   - When the argument family is applied
   - Then case (a) yields **no candidates** for that position and shrinking proceeds — it
     never throws, never fabricates a command, never leaves the position changed; and case
-    (b) throws a `LogicException` before any candidate runs, the same loud-not-silent guard
-    SPEC-002 already applies to `count(executed) === count(failing)`.
+    (b) throws a `LogicException` before any candidate runs, the same loud-not-silent
+    guard SPEC-002 already applies to `count(executed) === count(failing)`. (There is
+    deliberately **no** class-mismatch guard: a shrink that changes a command's class
+    within one branch — `Gen::map(fn ($n) => $n > 5 ? new Big($n) : new Small($n), …)` —
+    is legitimate, so guarding on class would abort valid shrinks while still not
+    catching a context desync; coupling is handled by construction instead, see Scope.)
 
-- **AC7 — a planted bug shrinks to its exact minimal argument value** *(R8)*
+- **AC6 — a planted bug shrinks to its exact minimal argument value** *(R8)*
   - Given a system with a bug that fires only for an argument at or above a threshold
     (e.g. a cache that overflows a cap), and a long failing sequence drawn with large
     values
@@ -149,12 +186,13 @@ shrinker stays external; it just receives the context again.
     value**, compared by its string representation — the argument-family analogue of
     SPEC-002 AC7's order-dependent planted bug.
 
-- **AC8 — structural shrinking is preserved under the wrapped input**
+- **AC7 — structural shrinking is preserved under the wrapped input**
   - Given the shrinker now receives `list<GeneratedValue<Command>>` and an alphabet
   - When a sequence with no reducible arguments is shrunk
   - Then the structural result is exactly what SPEC-002 AC1–AC4 and AC7 produced from bare
     commands — the plumbing change does not regress structural shrinking, and
-    `ShrinkResult::$commands` is still bare, unwrapped commands for rendering.
+    `ShrinkResult::$commands` is still bare, unwrapped commands for rendering. Testable
+    only once the migrated SPEC-002 suite (Scope) is green in wrapped form.
 
 ## API sketch
 
@@ -176,7 +214,7 @@ final class SequenceShrinker
     public function __construct(
         private SequenceRunner $runner,
         private Generator $alphabet,
-        private int $budget = 100,
+        private int $budget = 100,   // see Open questions — may need to change once a second family draws on it
     ) {}
 
     /**
@@ -192,7 +230,8 @@ final class SequenceShrinker
 
 /**
  * The argument family: for each executed position, yield candidates with just that position
- * replaced by an alphabet->shrink() alternative. Length-preserving; origin-first; finite.
+ * replaced by a whole alphabet->shrink() GeneratedValue (command + context together — coupling by
+ * construction). Length-preserving; origin-first; finite.
  *
  * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence  executed positions only
  * @param  Generator<Command<TModel, TSut, mixed>>             $alphabet
@@ -201,41 +240,47 @@ final class SequenceShrinker
 function argumentReductions(array $sequence, Generator $alphabet): iterable;
 ```
 
-**The forms at the layer boundary** change on one side only: SPEC-005 (`StatefulProperty`) must
-now keep the `GeneratedValue<Command>` wrappers it draws and hand them to the shrinker together
-with the alphabet, instead of unwrapping to bare commands on failure. SPEC-001 (the runner) is
-untouched — candidates are still shallow-cloned bare commands (R9b) before `SequenceRunner::run`.
+SPEC-001 (the runner) is untouched — candidates are still shallow-cloned bare commands
+(R9b) before `SequenceRunner::run`; the wrapper is unwrapped just before the run.
 
 ## Open questions
 
-- **Family ordering (blocker).** Structure-first-then-arguments, or interleave both families each
-  pass (fast-check interleaves)? It changes which combined minimum is reached and the cost. Decide
-  and record before approval; the AC3 minimum is defined *relative to the families the loop runs*,
-  so the loop's shape is part of the contract.
-- **The executed-subset interaction (blocker).** AC5 asserts re-filtering to the replay's executed
-  set. Before approval, confirm against the current `SequenceShrinker` whether the structural loop
-  already re-derives the executed set per accepted candidate (in which case the argument family
-  inherits it) or assumes a fixed set (in which case both families need the change). This is the
-  subtle correctness point flagged at scoping; settle it in code-reading, not by assumption.
-- **D021 successor (blocker — must be answered in `DECISIONS.md` first, per §1).** The matched-pair
-  invariant needs a decision entry: command and context paired, command authoritative, and a
-  shrinker-internal guard (AC6) that a shrunk candidate's command class matches the position it
-  replaces. The retracted D021 "was never implemented"; its successor must be, and tested.
-- **R10 gate (pre-approval).** Verify statically that a *heterogeneous* `list<GeneratedValue<Command<M,
-  S, mixed>>>` type-checks at PHPStan max — the same throwaway check that caught D017/D019 — before
-  approval, since the wrapper composes commands at differing arguments.
-- **Guarantee restatement reach (non-blocker).** AC3 changes what "local minimum" means. Enumerate
-  every place that states it — README limitations, `docs/tutorial.md` (both the argument-shrinking
-  limitation and the LRU/bank "held fixed / not minimised" notes), and any error/rendering text — so
-  the claim moves everywhere at once, not just in code.
-- **Budget accounting (non-blocker).** Argument candidates are executions like any other and count
-  toward the budget (SPEC-002 D007). Confirm the budget default (100) is still adequate once a second,
-  larger family draws from it, or whether the two families should share it differently.
+- **Budget — measure before approval (blocker).** The structural family is `L·(L−1)/2`
+  candidates per pass; the argument family adds roughly `L·k` (`k` = shrinks per value,
+  e.g. ~log₂(range) for integers). Combined, one pass on `L ≈ 10`, `k ≈ 7` is already
+  `~45 + ~70 ≈ 115 > 100` — the default budget would bite *within a single pass*, making
+  `budgetExhausted` the normal state and stamping "not a confirmed minimum" (R3) on nearly
+  every counterexample. That is a material UX regression. Before approval, measure a
+  realistic case (the LRU example, or a `Deposit(9999)` overflow) and decide: raise the
+  default, give the argument family its own share, or accept the flag as normal. Do not
+  approve on the current default without the measurement.
+- **D021 successor — record in `DECISIONS.md` first (blocker, per §1).** The successor is
+  *not* the retracted guard; it is the recorded decision that command/context coupling
+  holds **by construction** (each candidate is a whole `GeneratedValue` from `shrink()`),
+  so no runtime guard exists and none is needed. Write it as a decision so the retracted
+  guard is not reintroduced later as "protection".
+
+### Answered during review (kept for the record, not open)
+
+- **Executed-subset interaction — investigated in code (was a blocker).** Finding: the
+  current structural loop does **not** re-filter per candidate — it filters once up front
+  (`executedSubset`, on `$original->executed`) and an accepted candidate becomes `$current`
+  directly. This is nonetheless correct: a command skipped in a candidate's own replay is a
+  **no-op drop** (a skipped command never ran `nextState`, so removing it changes nothing),
+  which therefore always reproduces, so it is always droppable — and a local minimum, by
+  definition, contains no droppable command. Hence the *returned* result is executed-only,
+  for structural and argument reductions alike, as long as the structural drop stays in the
+  shared loop. This is a general shrinker property SPEC-002 states only for the up-front
+  filter, so it is being made explicit and tested via the SPEC-002 amendment (Scope), and
+  the earlier AC5 ("re-filter per candidate") is **removed** as unnecessary.
+- **Family ordering — decided** (structural first; see the Design decision above).
+- **R10 gate — verified.** Heterogeneous `list<GeneratedValue<Command<M, S, mixed>>>`
+  type-checks at PHPStan max (throwaway check, 2026-08-01).
 
 ## Traceability
 
-Filled when status becomes `implemented`. Every acceptance criterion maps to at least one test;
-every source file maps back to this spec.
+Filled when status becomes `implemented`. Every acceptance criterion maps to at least
+one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
@@ -246,4 +291,3 @@ every source file maps back to this spec.
 | AC5                  | —                           | —                    |
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |
-| AC8                  | —                           | —                    |
