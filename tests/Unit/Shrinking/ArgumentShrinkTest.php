@@ -8,7 +8,9 @@ use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Generation\Source;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\SequenceRunner;
+use Provemark\StatefulCheck\Setup;
 use Provemark\StatefulCheck\Shrinking\SequenceShrinker;
+use Provemark\StatefulCheck\StatefulProperty;
 
 /**
  * Always fails, carrying an integer argument for the argument family to reduce (SPEC-006). A single
@@ -262,4 +264,25 @@ it('reduces a value to the minimal that still fails, not the origin — a combin
     $result = (new SequenceShrinker(new SequenceRunner))->shrink([$drawn], $original, $freshSut, null, $alphabet);
 
     expect(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['atLeast(50)']);
+})->group('SPEC-006');
+
+it('threads the wrappers through check() so a counterexample carries the reduced argument (SPEC-006 AC9)', function () {
+    // End-to-end through check() with a GENERATED sequence (not hand-assembled — that would only re-test
+    // AC1 one layer up). An always-failing command with an integer argument: check() draws it, the run
+    // fails, and the reported counterexample must carry the *reduced* value (the origin, 1), not the value
+    // as drawn. That holds only if StatefulProperty retained the GeneratedValue wrappers AND passed the
+    // alphabet to the shrinker. The distinguishing mutant is subtle: pass the wrappers but omit the
+    // alphabet — structural shrinking still runs and reports a single command, but its argument stays
+    // unreduced, so this assertion (overdraw(1)) reddens while the shrink call itself keeps working.
+    $property = new StatefulProperty(
+        alphabet: [Gen::map(fn (int $n): Overdraw => new Overdraw($n), Gen::integers(1, 100))],
+        setup: fn (mixed $initial): Setup => new Setup(model: null, system: null),
+        initial: Gen::constant(null),
+        runs: 1,
+    );
+
+    $result = $property->check(seed: 1);
+
+    expect($result->passed)->toBeFalse()
+        ->and(array_map(fn (Command $c): string => (string) $c, $result->counterexample))->toBe(['overdraw(1)']);
 })->group('SPEC-006');
