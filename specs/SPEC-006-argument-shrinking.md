@@ -148,11 +148,24 @@ values on commands the structural family then throws away.
   - When any single further reduction — structural drop **or** argument reduction — is
     generated from it
   - Then every such candidate passes: "no single structural or argument reduction still
-    fails", and "local minimum" means exactly this. The restated guarantee and **every
-    place that states it** move together — the README limitations, `docs/tutorial.md`
-    (the argument-shrinking limitation and the "held fixed / not minimised" notes), and
-    `ShrinkResult` rendering — so no doc claims the old, narrower minimum. (The doc
-    propagation is a deliverable of this AC, not a separate un-owned scope item.)
+    fails", and "local minimum" means exactly this.
+  - *Self-referential, like SPEC-002 AC2 — its recorded conclusion applies here, not re-derived.*
+    The test shows the loop stops where no candidate of **the families it has** still fails; it
+    cannot detect a family that is too weak, only that the loop halts where it should. Only AC7 (a
+    planted bug with a known minimum) tests the real minimum, and with two families there is *more*
+    room for a minimum that sits higher than needed. The test's teeth: a value shrinks to the
+    **minimal that still fails, not the origin** — `AtLeast` fails only at n ≥ 50, so it converges to
+    50 (49 passes) — which is mutant-provable (a family that stops short misses 50).
+  - *Doc propagation — a deliverable of this AC, but **not mutant-provable**, and it lands at SPEC-006
+    finalisation, not here.* The restated guarantee and every place that states it — the README
+    limitations ("No argument shrinking"), `docs/tutorial.md` (the argument-shrinking limitation and
+    the "not minimised" notes), `ShrinkResult` rendering — must move together. But those describe the
+    **released** capability, and argument shrinking is not shippable until SPEC-006 completes; moving
+    them mid-implementation would claim a feature that is not yet released. So the doc move is deferred
+    to finalisation and done there as a **documented manual step** (a grep for the old wording is the
+    only non-manual form — the spec-check tool's pattern — but a manual pass is acceptable). Labelled
+    here so the traceability is not read as half-proven without the distinction: the behaviour half is
+    mutant-proven, the doc half is not testable and is pending finalisation.
 
 - **AC4 — termination with a length-preserving family** *(the central correctness risk)*
   - Given a sequence in which every executed position offers argument reductions, so the
@@ -352,7 +365,7 @@ one test; every source file maps back to this spec.
 |----------------------|-----------------------------|----------------------|
 | AC1                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "reduces a command's argument to the smallest that still fails" (SPEC-006) — mutant-proven: dropping the argument family from `candidates()` leaves `overdraw(93)` | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (per position, `$alphabet->shrink()` replaces one command), `candidates` (structure-first then argument), `shrink`'s `?Generator $alphabet` param; `src/StatefulProperty.php` :: `check` passes `$commandGenerator` to `shrink()` |
 | AC2                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "yields length-preserving, single-position candidates — the alphabet shrinks, one at a time" (SPEC-006) — a shape-pin, green on arrival; mutant-proven (accumulating changes across positions reddens the single-position assertion) rather than red-first | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (one position replaced per candidate by `$alphabet->shrink()`, same length) |
-| AC3                  | —                           | —                    |
+| AC3                  | **Behaviour half (mutant-proven):** `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "reduces a value to the minimal that still fails, not the origin — a combined local minimum" (SPEC-006) — `atLeast(93)` → `atLeast(50)` (49 passes; self-referential like SPEC-002 AC2, real minimum is AC7); mutant: a family that stops short misses 50. **Doc half (not testable):** the guarantee restatement in README / `docs/tutorial.md` / `ShrinkResult` rendering is **pending SPEC-006 finalisation** (docs describe the released capability), a documented manual step, no test | `src/Shrinking/SequenceShrinker.php` :: the accept loop over `candidates()` (structural + argument), which halts at the combined local minimum |
 | AC4                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "every argument reduction strictly lowers the (length, distance-to-origin) measure" (the proof-property, directly checkable — a non-decreasing candidate reddens it *without hanging*, mutant-proven: "142 is less than 142") + "the shrink loop terminates on its own, without the budget biting" (`budgetExhausted === false` at a huge budget) (SPEC-006) | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (each candidate strictly closer to origin), the accept loop (structural strictly shorter + argument strictly closer → the lexicographic measure falls) |
 | AC5                  | `tests/Meta/ArgumentShrinkExecutedSubsetTest.php` :: "never returns a counterexample containing a non-executed command — the argument-family tripwire" (groups `meta`, `SPEC-006`) — a **tripwire**, not mutant-proven (the violation is not currently constructible; see the reachability finding) | `src/Shrinking/SequenceShrinker.php` :: `stillFails` (returns the `RunResult`), the accept loop (re-filters the accepted candidate via `executedSubset`) — unconditional hardening, no red-first test (a marked exception, gated by the tripwire) |
 | AC6                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "yields no argument candidates for a value already at its origin" (case a, green on arrival) + "lets a generator context error propagate, never swallows it" (case c, green on arrival; mutant-proven — a swallowing `try/catch` reddens it); case (b) is the existing SPEC-002 guard, tested by `SequenceShrinkerTest` :: "fails loudly when the executed record does not match…" (migrated to wrapped form in step 0) | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (no candidates at origin; no `try/catch`, so `$alphabet->shrink()` throws propagate), `::shrink` (the `count(executed) === count($failing)` guard) |

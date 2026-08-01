@@ -205,3 +205,61 @@ it('lets a generator context error propagate, never swallows it (SPEC-006 AC6, c
         false,
     ))->toThrow(LogicException::class);
 })->group('SPEC-006');
+
+/**
+ * Fails only when its argument is at least 50 — so the argument family converges to the *threshold* (50),
+ * not the origin: 49 passes. A minimum that is a real boundary, not just the range floor.
+ *
+ * @implements Command<null, null, null>
+ */
+final class AtLeast implements Command
+{
+    public function __construct(public int $n) {}
+
+    public function preCondition(mixed $model): bool
+    {
+        return true;
+    }
+
+    public function run(mixed $sut): mixed
+    {
+        return null;
+    }
+
+    public function nextState(mixed $model): mixed
+    {
+        return $model;
+    }
+
+    public function postCondition(mixed $model, mixed $sut, Outcome $outcome): bool
+    {
+        return $this->n < 50;
+    }
+
+    public function __toString(): string
+    {
+        return "atLeast({$this->n})";
+    }
+}
+
+it('reduces a value to the minimal that still fails, not the origin — a combined local minimum (SPEC-006 AC3)', function () {
+    // The combined local minimum is **self-referential**, exactly as SPEC-002 AC2 records: this shows the
+    // loop stops where no single structural OR argument reduction still fails — not that the families are
+    // strong enough to reach the true minimum. Only AC7 (a planted bug with a known minimum) can test that,
+    // and with two families there is more room for a minimum that sits higher than needed. `AtLeast` fails
+    // only at n >= 50, so the argument family converges to exactly 50 (49 passes → no further argument
+    // reduction still fails), and length 1 leaves no structural reduction — a combined minimum at a real
+    // threshold, not the range floor.
+    $alphabet = Gen::alphabet([
+        Gen::map(fn (int $n): AtLeast => new AtLeast($n), Gen::integers(1, 100)),
+    ]);
+    $drawn = $alphabet->generate(Source::seeded(7));
+    expect((string) $drawn->value)->toBe('atLeast(93)');   // guard the pinned seed
+
+    $freshSut = fn (): ?object => null;
+    $original = (new SequenceRunner)->run([$drawn->value], $freshSut, null);
+
+    $result = (new SequenceShrinker(new SequenceRunner))->shrink([$drawn], $original, $freshSut, null, $alphabet);
+
+    expect(array_map(fn (Command $c): string => (string) $c, $result->commands))->toBe(['atLeast(50)']);
+})->group('SPEC-006');
