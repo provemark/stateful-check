@@ -124,8 +124,16 @@ final class SequenceShrinker
                     break 2;
                 }
                 $executions++;
-                if ($this->stillFails($candidate, $baseline, $freshSut, $initialModel)) {
-                    $current = $candidate;
+                $replay = $this->stillFails($candidate, $baseline, $freshSut, $initialModel);
+                if ($replay !== null) {
+                    // Re-filter the accepted candidate to what actually ran in ITS OWN replay, so the
+                    // returned counterexample is always the executed subset of the sequence returned —
+                    // never a command that did not run (SPEC-006 AC5). Unconditional: a reduction that
+                    // moves the failure earlier and leaves the retained last command unexecuted is the
+                    // case this closes; that its trigger is (currently) unreachable is what makes this
+                    // hardening rather than a fix with a red-first test. When every command ran, the
+                    // subset is the candidate unchanged.
+                    $current = $this->executedSubset($candidate, $replay);
                     $reduced = true;
                     break;
                 }
@@ -169,10 +177,12 @@ final class SequenceShrinker
     }
 
     /**
-     * Runs a candidate against a fresh system and reports whether it still fails the *same* way as
-     * the original (AC1's identity, D020): a different-kind failure is not a reproduction, so the
-     * loop never drifts toward a bug we were not shrinking. Each command is shallow-cloned before the
-     * run (R9b).
+     * Runs a candidate against a fresh system and returns that run **iff** it still fails the *same*
+     * way as the original (AC1's identity, D020): a different-kind failure is not a reproduction, so the
+     * loop never drifts toward a bug we were not shrinking. Returns `null` when the candidate does not
+     * reproduce. The `RunResult` is returned (not a bare bool) so the caller can re-filter the accepted
+     * candidate to its own executed subset (SPEC-006 AC5). Each command is shallow-cloned before the run
+     * (R9b).
      *
      * @template TModel
      * @template TSut
@@ -181,11 +191,11 @@ final class SequenceShrinker
      * @param  callable(): TSut  $freshSut
      * @param  TModel  $initialModel
      */
-    private function stillFails(array $candidate, Failure $baseline, callable $freshSut, mixed $initialModel): bool
+    private function stillFails(array $candidate, Failure $baseline, callable $freshSut, mixed $initialModel): ?RunResult
     {
         $result = $this->replay($candidate, $freshSut, $initialModel);
 
-        return ! $result->passed && $result->failure !== null && $result->failure->sameKindAs($baseline);
+        return ! $result->passed && $result->failure !== null && $result->failure->sameKindAs($baseline) ? $result : null;
     }
 
     /**

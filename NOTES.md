@@ -1662,3 +1662,44 @@ belongs to the sequence being shrunk anyway (two sequences from different alphab
 is now expressible). `null` is a **contract** ("shrink structurally only"), recorded as such so no reader
 mistakes it for a forgotten argument — the same silent-degradation class the project keeps closing.
 Amendment row added to SPEC-006; the illustrative sketch corrected.
+
+## Step 58 — SPEC-006 AC5: an unreachable trigger, a tripwire, and R11 caught during the build (2026-08-01)
+
+AC5 was specced as "re-filter the accepted candidate so the counterexample is the executed subset of its
+own replay", with a planted-bug meta-test proving it. Building that test, the planted bug would not
+plant: the trigger — a returned counterexample ending on a non-executed command — proved **not
+constructible**. Three attempts, all recovered:
+1. a two-mode single class (small arg fails alone; setup fails via history) — recovers, tail reduces to a
+   fail-alone value;
+2. maurice's `Bump`/`Trip` with the setup as a **system flag** (not an argument, so it cannot shrink) —
+   recovers, structure-first drops the passing middle `Trip` before the argument family can make it the
+   failer, and the tail fails with the surviving `Bump`;
+3. a self-bumping variant — recovers, the tail self-provides its setup and fails alone once reduced.
+
+The structural reason (the argument that finally closed): for a same-class-as-tail command before the
+tail to be **non-droppable**, it must contribute setup; but a contributing command is either the tail
+itself (self-provides, fails alone reduced) or a distinct setup command that structure-first drops as a
+passing no-op. So the loop always reaches a fully-executed counterexample.
+
+Three things kept honest, all maurice's:
+- **Conditional, not a proof.** The unreachability rests on two present choices — family order is
+  structure-first, and `sameKindAs` matches on command *class*. Change either and the trigger returns.
+  Written as a **Revisit if** on AC5, the same distinction made at D022 — "unreachable under these
+  choices", not "impossible".
+- **Re-filter without a red-first test is a marked exception.** It lands as unconditional hardening (three
+  lines), like the `Generator`/`Command` contract commits: its gate is the AC5 tripwire, which fails if
+  the re-filter breaks the invariant once the trigger is reachable — covered, just not red-first. Keeping
+  it removes the property's dependence on the two choices above (adjusted twice already), which is
+  removing an assumption, not speculative generality.
+- **The meta-invariant is a tripwire, not mutant-proven.** "No returned counterexample contains a
+  non-executed command" never reddens by a mutant here, because the violation cannot be built; removing
+  the re-filter leaves it green. Its value is firing when a future change makes the trigger reachable —
+  labelled exactly as SPEC-005 AC2's wiring-reproduction test was, not dressed up as a correctness proof.
+
+And the meta-observation maurice flagged: this is the **third** time R11 has caught something (after
+`Failure::$reason` and SPEC-002's empty-sequence probe), and the **first** time it surfaced during the
+*build* rather than at *review*. The earlier two were unbuildable-promise / unreachable-branch caught by
+reading; this one only showed when the planted bug refused to plant. That says where the pre-approval
+gate reaches and where it does not: R11 at approval checks the AC's *shape* is fulfillable, but whether a
+*planted-system* trigger is constructible can need the machinery to exist first. The catch still worked —
+just one layer later than the gate intends.

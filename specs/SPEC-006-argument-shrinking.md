@@ -80,17 +80,16 @@ shrinker gave up and this spec threads back in.
   today's meta-suite (SPEC-002 AC7) plants only an argument-free bug.
 - **Cross-spec amendments, delivered here:**
   - *SPEC-002.* AC2's local-minimum wording is superseded by AC3 below. AC3 of SPEC-002
-    is **fixed**, not merely clarified: the returned counterexample must be the executed
-    subset of the *finally accepted* candidate, so it never contains a non-executed
-    command. The up-front filter does not guarantee this on its own — the review found a
-    gap the earlier "no-op drop" argument missed: a reduction can move the failure earlier
-    and leave the retained last command (SPEC-002 AC4) non-executed, which no drop can then
-    remove (AC5). The fix is to re-filter every accepted candidate through its own replay's
-    executed set — a general property of the shrinker's acceptance logic, so the code
-    change is owned here in SPEC-002. The trigger is reachable in both families; the
-    *non-recovering* case — where re-filtering is the only thing keeping the result clean —
-    is reliably constructible with argument shrinking, so the failing test lives in SPEC-006
-    AC5 (constructible there, not impossible here).
+    is **strengthened**: the returned counterexample is the executed subset of the *finally
+    accepted* candidate, so it never contains a non-executed command — enforced by re-filtering
+    every accepted candidate through its own replay's executed set (the shared acceptance logic,
+    owned here in SPEC-002). This closes a gap the earlier "no-op drop" argument missed: a
+    reduction could move the failure earlier and leave the retained last command (SPEC-002 AC4)
+    unexecuted, which no drop then removes. Its *trigger* proved unreachable across three
+    attempts (AC5's finding), so the re-filter is **unconditional hardening, not a red-first
+    fix**: it removes the property's dependence on the family-order and `sameKindAs` choices
+    rather than patching a reproducible bug. The tripwire that would fire if a future change
+    makes the trigger reachable lives in SPEC-006 AC5.
   - *SPEC-005.* `StatefulProperty` stops unwrapping the drawn `GeneratedValue<Command>`
     on failure; it retains the wrappers and hands them, plus the alphabet, to the shrinker.
 - **Migrating the existing shrinker tests** to the wrapped input: `SequenceShrinkerTest`
@@ -169,37 +168,42 @@ values on commands the structural family then throws away.
     budget alone (the budget is the bound for *expensive* systems, AC9 of SPEC-002, not
     the reason the loop halts).
 
-- **AC5 — an accepted candidate is re-filtered to its own executed subset** *(the point the
-  no-op-drop argument misses; fix lives in the shared acceptance logic)*
-  - Given an accepted candidate in which the failure moved earlier — a reduction made a
-    command fail before a later one it had set up, so that later command (kept by AC4's
-    last-command rule) did not execute in this candidate's replay
-  - When the candidate is accepted
-  - Then the retained representation is the executed subset of **that candidate's own
-    replay**, not the parent's, so the returned counterexample never contains — and never
-    ends on — a command that did not run. (`stillFails` already runs the candidate; it
-    returns that `RunResult` instead of a bare bool, and acceptance re-filters through
-    `executedSubset`. Cheap and unconditional.)
-  - *Reachability and placement, from the review's code investigation.* The **trigger** is
-    reachable in both families — the first review's "structural recovers" claim was wrong,
-    and it was an unproven unreachability claim (the class R11 guards against). A command
-    class that carries arguments has same-class instances that behave differently *at draw
-    time*, no shrinking needed: `[Deposit(10000), Withdraw(9999), Withdraw(50)]` failing at
-    the last on an empty balance, drop `Deposit` structurally, and `Withdraw(9999)` fails
-    immediately from the initial state — same class, same `FailureKind`, accepted, with the
-    retained last command never run. What differs is whether the loop then **recovers**
-    (reduces past the non-executed tail), and that is a property of the *system*, not the
-    family: it recovers when the isolated tail fails on its own (there `[Withdraw(50)]` also
-    overdraws, so the loop reaches it) and not when the tail needs the setup that just
-    vanished. The empirical `[inc,check,dec,check]` → `[check]` is one recovering case, not
-    evidence of unreachability. Argument shrinking makes the **non-recovering** case — the
-    one only re-filtering keeps clean — reliably constructible; structurally it was not
-    constructed in the cases tried. So the fix is a general property of the shrinker (the
-    SPEC-002 amendment: the shared acceptance logic, with SPEC-002 AC3 strengthened to "the
-    returned result is executed-only via re-filtering, not the up-front filter alone"), and
-    the failing test lives here because it is reliably **constructible** here — not because
-    the trigger is impossible structurally. **Confirmed with the maintainer:** fix in the
-    SPEC-002 amendment, failing test in this AC.
+- **AC5 — no returned counterexample contains a non-executed command** *(a meta-invariant /
+  tripwire; the re-filter is unconditional hardening, not a fix with a red-first test)*
+  - Given any shrink that runs to a confirmed local minimum
+  - When the returned counterexample is re-run against a fresh system
+  - Then every command it contains executed — the counterexample is always the executed
+    subset of its own replay. The shrinker enforces this **unconditionally**: an accepted
+    candidate is re-filtered through `executedSubset` of its own replay (`stillFails` returns
+    the `RunResult` instead of a bare bool), so a reduction that moved the failure earlier and
+    left the retained last command unexecuted cannot survive into the result.
+  - *Reachability finding (R11), established during the build not the review.* The bug this
+    guards — a returned counterexample ending on a command that did not run — has a **trigger
+    that appears unreachable**, tested across three constructions (a two-mode single class; the
+    maintainer's `Bump`/`Trip` with a **system-flag** setup, not an argument; a self-bumping
+    variant), all of which the shrinker **recovers** from to a fully-executed counterexample.
+    The structural reason: for a same-class-as-tail command before the tail to be non-droppable
+    it must contribute setup, but a contributing command is either the tail itself (which then
+    self-provides its setup and fails alone once its argument is reduced) or a distinct setup
+    command that **structure-first drops as a passing no-op** before the argument family can
+    turn it into the failer. Either way the loop reaches a fully-executed counterexample.
+  - *This is conditional, not a proof.* It rests on exactly two present choices: the family
+    order is **structure-first** (a passing middle command is dropped before it is
+    argument-reduced), and **`sameKindAs` matches on command class** (so the moved-forward
+    failure must be the same class as the tail). **Revisit if** either changes — arguments-first
+    or interleaved family order, or a failure identity finer than command class (by argument or
+    message). Either reopens the trigger, and then the re-filter earns the *red-first* test this
+    AC's tripwire cannot currently be.
+  - *Why a tripwire, not a planted-bug meta-test (R8's honest exception).* The invariant is
+    asserted over the closest-to-reachable construction (`Bump`/`Trip`), but **no mutant reddens
+    it** — the violation cannot currently be built, so removing the re-filter leaves it green. It
+    is therefore not mutant-proven and not a proof of correctness; it is a **tripwire** whose
+    value is firing when a future change (above) makes the trigger reachable — the same honest
+    labelling as SPEC-005 AC2's wiring-reproduction test. The re-filter lands as **hardening
+    without a red-first test**, a marked exception like the `Generator`/`Command` contract
+    commits: its gate is this tripwire, not a planted failure. Keeping it is removing an
+    assumption (the property is otherwise conditional on the two choices above, adjusted twice
+    already), not speculative generality.
 
 - **AC6 — a context the alphabet cannot shrink, or a length mismatch, fails safely**
   *(required: error / malformed-input path)*
@@ -313,20 +317,18 @@ SPEC-001 (the runner) is untouched — candidates are still shallow-cloned bare 
   none needed — while AC5's length-mismatch guard (input validation, not pair-guarding) stays.
   The §1 blocker (an open question must be answered in `DECISIONS.md` before approval) is met.
 
-- **Executed-subset interaction — investigated in code, and it re-opens a narrowed AC5.**
+- **Executed-subset interaction — investigated in code; the trigger proved unreachable.**
   Finding: the structural loop does **not** re-filter per candidate — it filters once up
   front (`executedSubset`, on `$original->executed`) and an accepted candidate becomes
-  `$current` directly. The first review argued this was harmless via a "no-op drop"
-  argument (a skipped command's drop reproduces, so it is always droppable). **That argument
-  has a gap on the last position**, which SPEC-002 AC4's last-command rule never drops — so an
-  accepted candidate can end on a command that did not run, and no drop removes it. The
-  trigger is reachable in **both** families (a same-class command carrying arguments already
-  behaves differently at draw time — see AC5's `[Deposit, Withdraw(9999), Withdraw(50)]`); the
-  `[inc,check,dec,check]` → `[check]` recovery is one system where the isolated tail happens to
-  fail on its own, not proof of structural unreachability. What argument shrinking adds is a
-  reliably **constructible non-recovering** case. So AC5 returns, narrowed to the real fix —
-  re-filter each accepted candidate to its own executed subset — with the fix owned by the
-  SPEC-002 amendment and the failing test owned here (AC5), because it is constructible here.
+  `$current` directly. The "no-op drop" argument that this is harmless **has a gap on the last
+  position**, which SPEC-002 AC4's last-command rule never drops — so *in principle* an accepted
+  candidate could end on a command that did not run. But the case that would exercise that gap
+  proved **not constructible**: three attempts (two-mode single class; `Bump`/`Trip` with a
+  system-flag setup; a self-bumping variant) all recover, for the structural reason in AC5
+  (structure-first drops a passing setup command before the argument family can make it the
+  failer; a self-providing tail fails alone once reduced). So AC5 is a **tripwire + unconditional
+  re-filter** (hardening), not a planted-bug meta-test — and the finding is **conditional** on
+  the family order and `sameKindAs` granularity (Revisit if, in AC5).
 - **Family ordering — decided** (structural first; see the Design decision above).
 - **R10 gate — verified.** Heterogeneous `list<GeneratedValue<Command<M, S, mixed>>>`
   type-checks at PHPStan max (throwaway check, 2026-08-01).
@@ -342,7 +344,7 @@ one test; every source file maps back to this spec.
 | AC2                  | —                           | —                    |
 | AC3                  | —                           | —                    |
 | AC4                  | —                           | —                    |
-| AC5                  | —                           | —                    |
+| AC5                  | `tests/Meta/ArgumentShrinkExecutedSubsetTest.php` :: "never returns a counterexample containing a non-executed command — the argument-family tripwire" (groups `meta`, `SPEC-006`) — a **tripwire**, not mutant-proven (the violation is not currently constructible; see the reachability finding) | `src/Shrinking/SequenceShrinker.php` :: `stillFails` (returns the `RunResult`), the accept loop (re-filters the accepted candidate via `executedSubset`) — unconditional hardening, no red-first test (a marked exception, gated by the tripwire) |
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |
 | AC8                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` (all, migrated to `wrapCommands()`) + `tests/Meta/OrderDependentShrinkTest.php` :: "shrinks an order-dependent bug to its known minimal sequence" (SPEC-002) — the existing structural suite, green-on-arrival under wrapped input | `src/Shrinking/SequenceShrinker.php` :: `shrink`/`executedSubset`/`candidateReductions`/`replay` carry `GeneratedValue<Command>`, `unwrap()` renders bare; `src/StatefulProperty.php` :: `check` retains the wrappers and passes them to the shrinker |
