@@ -5,6 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-08-01                               |
+| Amended    | maurice, 2026-08-01 — the argument alphabet is a **parameter of `shrink()`**, not a constructor collaborator as the API sketch first drew it. A class-level alphabet cannot share `shrink()`'s method templates: a concretely-typed `Generator<Command<null, null, mixed>>` is not assignable to a class-level `Generator<Command<mixed, mixed, mixed>>` under `Command`'s invariance, so the shrinker's own tests could not construct it (verified at PHPStan max). As a method parameter it binds per call, like `$freshSut`/`$initialModel`, and the alphabet belongs to the sequence being shrunk. `null` is a contract — "shrink structurally only" — not a forgotten value. Illustrative sketch only, but recorded because it corrects the sketch. |
 | Supersedes | —                                                 |
 | Amends     | SPEC-002 (AC2's local-minimum wording; AC3 clarified — the *returned* result is executed-only via the reduction loop, not the up-front filter alone) and SPEC-005 (`StatefulProperty` retains `GeneratedValue` wrappers and passes the alphabet to the shrinker). Both are `implemented`, so these are formal amendments approved together with this spec. |
 
@@ -248,19 +249,16 @@ Illustrative only. The change is a return to the pre-retraction shape, plus one 
 ```php
 // namespace Provemark\StatefulCheck\Shrinking;
 
-/**
- * @template TModel
- * @template TSut
- */
+// The shrinker stays non-generic (method-level templates), and the alphabet is a parameter of
+// shrink(), NOT a constructor collaborator (2026-08-01 amendment): a class-level alphabet cannot share
+// shrink()'s method templates, so a concretely-typed Generator<Command<null, null, mixed>> is not
+// assignable to a class-level Generator<Command<mixed, mixed, mixed>> under Command's invariance — the
+// shrinker's own tests could not construct it. As a method parameter it binds to the same templates per
+// call, exactly as $freshSut and $initialModel do; the alphabet belongs to the sequence being shrunk.
 final class SequenceShrinker
 {
-    /**
-     * @param Generator<Command<TModel, TSut, mixed>> $alphabet  the command generator, for the
-     *   argument family (AlphabetGenerator::shrink delegates to the branch that produced each command)
-     */
     public function __construct(
         private SequenceRunner $runner,
-        private Generator $alphabet,
         private int $budget = 100,   // see Open questions — may need to change once a second family draws on it
     ) {}
 
@@ -270,9 +268,14 @@ final class SequenceShrinker
      * @param  RunResult                                            $original
      * @param  callable(): TSut                                     $freshSut
      * @param  TModel                                               $initialModel
+     * @param  ?Generator<Command<TModel, TSut, mixed>>             $alphabet  the generator the sequence
+     *   was drawn from; **null is a contract meaning "shrink structurally only"**, not a forgotten value
      * @return ShrinkResult<TModel, TSut>   $commands still bare (unwrapped) for rendering
+     *
+     * @template TModel
+     * @template TSut
      */
-    public function shrink(array $failing, RunResult $original, callable $freshSut, mixed $initialModel): ShrinkResult;
+    public function shrink(array $failing, RunResult $original, callable $freshSut, mixed $initialModel, ?Generator $alphabet = null): ShrinkResult;
 }
 
 /**
@@ -335,7 +338,7 @@ one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
+| AC1                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "reduces a command's argument to the smallest that still fails" (SPEC-006) — mutant-proven: dropping the argument family from `candidates()` leaves `overdraw(93)` | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (per position, `$alphabet->shrink()` replaces one command), `candidates` (structure-first then argument), `shrink`'s `?Generator $alphabet` param; `src/StatefulProperty.php` :: `check` passes `$commandGenerator` to `shrink()` |
 | AC2                  | —                           | —                    |
 | AC3                  | —                           | —                    |
 | AC4                  | —                           | —                    |

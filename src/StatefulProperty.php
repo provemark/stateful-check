@@ -118,6 +118,7 @@ final class StatefulProperty
                     $result,
                     fn () => ($this->setup)($initialValue)->system,
                     $setup->model,
+                    $commandGenerator,
                 );
 
                 // Propagate the shrink's qualifications (AC5): a budget-limited or abandoned shrink must

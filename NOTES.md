@@ -1635,3 +1635,30 @@ Two honesties for the record, both maurice's distinctions:
   call sites migrated (`SequenceShrinkerTest` 11 + `OrderDependentShrinkTest` 1); the SPEC-005
   `StatefulPropertyTest` cases did **not** shift, because `check()` wraps internally and they call
   `check()`, not the shrinker — the layer boundary absorbed it. Full suite 91 green, examples green.
+
+## Step 57 — SPEC-006 AC1: the argument family, and the sixth combination wall (2026-08-01)
+
+AC1 (a command's argument reduces to the smallest that still fails) is green: `argumentReductions()`
+replaces one position with each `$alphabet->shrink()` candidate, `candidates()` runs it structure-first
+after the structural family, and `shrink()` takes the alphabet. Mutant-proven — drop the family from
+`candidates()` and the counterexample stays `overdraw(93)`.
+
+**The sixth combination wall, and it has a new shape.** The alphabet started in the constructor (the
+approved API sketch). Building it, I worried the class-level alphabet couldn't share `shrink()`'s method
+templates, ran a throwaway PHPStan probe of `argumentReductions` in isolation — `[OK]` — and proceeded.
+But that probe tested the **internal assignment** (`$candidate[$i] = $shrunk`), which passes, and *not*
+the **construction site** with a concretely-typed alphabet, which fails: a test's
+`Generator<Command<null, null, mixed>>` is not assignable to a class-level `Generator<Command<mixed,
+mixed, mixed>>` under `Command`'s invariance. Production (`StatefulProperty`, a *templated* alphabet)
+passed; the shrinker's own tests (concrete alphabet) could not construct it — so the check ran green on
+the half that did not matter.
+
+The generalisable lesson (maurice's): an R10-style gate must mimic the **call site as a user writes it**,
+not just the internal signature — the difference between the templated production path and the concrete
+test path is exactly where the wall hid. The five earlier walls were "the check was missing"; this one
+was "the check tested the wrong path". Fix: the alphabet is a **parameter of `shrink()`**, sharing its
+method templates (binds per call, like `$freshSut`/`$initialModel`) — type-correct, and the alphabet
+belongs to the sequence being shrunk anyway (two sequences from different alphabets through one shrinker
+is now expressible). `null` is a **contract** ("shrink structurally only"), recorded as such so no reader
+mistakes it for a forgotten argument — the same silent-degradation class the project keeps closing.
+Amendment row added to SPEC-006; the illustrative sketch corrected.

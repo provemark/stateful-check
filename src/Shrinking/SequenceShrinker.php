@@ -8,6 +8,7 @@ use LogicException;
 use Provemark\StatefulCheck\Command;
 use Provemark\StatefulCheck\Failure;
 use Provemark\StatefulCheck\Generation\GeneratedValue;
+use Provemark\StatefulCheck\Generation\Generator;
 use Provemark\StatefulCheck\RunResult;
 use Provemark\StatefulCheck\SequenceRunner;
 
@@ -27,7 +28,12 @@ use Provemark\StatefulCheck\SequenceRunner;
  * at the moment of running (`replay`) and in the final result (`ShrinkResult` renders bare commands).
  *
  * The command types are method-level templates, as on `SequenceRunner` — the shrinker holds only a
- * (non-generic) runner, so there is nothing to bind at construction.
+ * (non-generic) runner. The alphabet the argument family shrinks through is a **parameter of `shrink()`**,
+ * not a constructor collaborator: it belongs to the sequence being shrunk (the sequence's commands came
+ * from it), the same way `$freshSut` and `$initialModel` do, and its command type binds to the same
+ * method templates per call. A class-level alphabet cannot: a concretely-typed `Generator<Command<null,
+ * null, mixed>>` is not assignable to a class-level `Generator<Command<mixed, mixed, mixed>>` under
+ * `Command`'s invariance, so the shrinker's own tests could not construct it (verified at PHPStan max).
  */
 final class SequenceShrinker
 {
@@ -43,9 +49,15 @@ final class SequenceShrinker
      * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $failing
      * @param  callable(): TSut  $freshSut
      * @param  TModel  $initialModel
+     * @param  ?Generator<Command<TModel, TSut, mixed>>  $alphabet  the generator the sequence was drawn
+     *                                                              from, for the argument family (SPEC-006): each candidate is a whole `GeneratedValue` from
+     *                                                              `$alphabet->shrink()`, so a command and its context stay a matched pair by construction (D023).
+     *                                                              **`null` is a contract, not a forgotten value: it means shrink structurally only** — the v0.1
+     *                                                              mode — and the argument family is then deliberately, not accidentally, absent. A caller that
+     *                                                              wants argument shrinking passes the alphabet; one that does not, does not.
      * @return ShrinkResult<TModel, TSut>
      */
-    public function shrink(array $failing, RunResult $original, callable $freshSut, mixed $initialModel): ShrinkResult
+    public function shrink(array $failing, RunResult $original, callable $freshSut, mixed $initialModel, ?Generator $alphabet = null): ShrinkResult
     {
         if (count($original->executed) !== count($failing)) {
             // $failing and $original must be the same run: a length mismatch would filter the wrong
@@ -93,18 +105,17 @@ final class SequenceShrinker
         $current = $this->executedSubset($failing, $original);
 
         // Reduce to a local minimum (AC2). On each accepted candidate, restart generation from the
-        // reduced sequence. The restart is load-bearing (AC7 proves it): the family drops one
-        // contiguous chunk per candidate, so a minimum needing two non-contiguous drops — leading and
-        // middle junk around the failing commands — is only reached across successive passes. A single
-        // pass stalls one drop short. Termination rests on every accepted candidate being *strictly
-        // shorter* than its predecessor — a property of the structural family, not of this loop — so
-        // `$current` shrinks on every restart and the loop cannot run forever. A length-preserving
-        // family (the argument family) would break that; it may be added only once AC9's budget
-        // provides the safety net.
+        // reduced sequence. The restart is load-bearing (SPEC-002 AC7 proves it): the structural family
+        // drops one contiguous chunk per candidate, so a minimum needing two non-contiguous drops —
+        // leading and middle junk around the failing commands — is only reached across successive passes.
+        // Candidates come structure-first, then argument reductions (SPEC-006). Structural drops are
+        // strictly shorter, so on the structural family alone the loop trivially terminates; the argument
+        // family is length-preserving, so termination now also rests on the budget and on each
+        // `shrink()` being finite and origin-ward (SPEC-006 AC4 formalises the lexicographic measure).
         $budgetExhausted = false;
         do {
             $reduced = false;
-            foreach ($this->candidateReductions($current) as $candidate) {
+            foreach ($this->candidates($current, $alphabet) as $candidate) {
                 // Checked before running, so a run that confirms the local minimum on its last allowed
                 // execution exits the pass naturally below (no next candidate to trip this) and is NOT
                 // budget-limited; the budget only fires when it interrupts a pass mid-search (AC9).
@@ -234,6 +245,55 @@ final class SequenceShrinker
         for ($s = $length - 1; $s >= 1; $s--) {
             for ($k = 0; $k <= $length - 1 - $s; $k++) {
                 yield [...array_slice($sequence, 0, $k), ...array_slice($sequence, $k + $s)];
+            }
+        }
+    }
+
+    /**
+     * All reduction candidates, structure-first then argument (SPEC-006). The structural family drops
+     * or slices whole wrappers (SPEC-002 AC4); the argument family reduces one command's value in place.
+     * Structure-first is the cheaper order and the one AC3's minimum is defined against: every accepted
+     * drop removes a position the argument family would otherwise have shrunk (SPEC-006 design decision).
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence
+     * @param  ?Generator<Command<TModel, TSut, mixed>>  $alphabet
+     * @return iterable<list<GeneratedValue<Command<TModel, TSut, mixed>>>>
+     */
+    private function candidates(array $sequence, ?Generator $alphabet): iterable
+    {
+        yield from $this->candidateReductions($sequence);
+        yield from $this->argumentReductions($sequence, $alphabet);
+    }
+
+    /**
+     * Argument reduction candidates (SPEC-006): for each position, replace just that command with each
+     * smaller `GeneratedValue` the alphabet yields from the one that produced it. The candidate is a
+     * whole `GeneratedValue` straight from `$alphabet->shrink()`, so its command and context stay a
+     * matched pair by construction (D023). Length-preserving, closest-to-origin first, finite
+     * (`Generator::shrink`). Yields nothing without an alphabet (structural-only) or for a position the
+     * alphabet cannot shrink — a value already at its origin (SPEC-006 AC6, case a).
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence
+     * @param  ?Generator<Command<TModel, TSut, mixed>>  $alphabet
+     * @return iterable<list<GeneratedValue<Command<TModel, TSut, mixed>>>>
+     */
+    public function argumentReductions(array $sequence, ?Generator $alphabet): iterable
+    {
+        if ($alphabet === null) {
+            return;
+        }
+
+        foreach ($sequence as $i => $wrapper) {
+            foreach ($alphabet->shrink($wrapper) as $shrunk) {
+                $candidate = $sequence;
+                $candidate[$i] = $shrunk;
+                yield array_values($candidate);
             }
         }
     }
