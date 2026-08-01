@@ -342,5 +342,5 @@ one test; every source file maps back to this spec.
 | AC5                  | —                           | —                    |
 | AC6                  | —                           | —                    |
 | AC7                  | —                           | —                    |
-| AC8                  | —                           | —                    |
+| AC8                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` (all, migrated to `wrapCommands()`) + `tests/Meta/OrderDependentShrinkTest.php` :: "shrinks an order-dependent bug to its known minimal sequence" (SPEC-002) — the existing structural suite, green-on-arrival under wrapped input | `src/Shrinking/SequenceShrinker.php` :: `shrink`/`executedSubset`/`candidateReductions`/`replay` carry `GeneratedValue<Command>`, `unwrap()` renders bare; `src/StatefulProperty.php` :: `check` retains the wrappers and passes them to the shrinker |
 | AC9                  | —                           | —                    |

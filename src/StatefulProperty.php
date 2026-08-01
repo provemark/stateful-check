@@ -88,9 +88,14 @@ final class StatefulProperty
             // Draw one sequence: a length in [1, maxLength] (origin 1), then that many commands drawn
             // uniformly from the alphabet.
             $length = $lengths->generate($source)->value;
+            // Keep both forms: the bare command for this run, and the `GeneratedValue` wrapper (its
+            // command plus generation context) that the shrinker needs to shrink arguments (SPEC-006).
             $commands = [];
+            $wrapped = [];
             for ($position = 0; $position < $length; $position++) {
-                $commands[] = $commandGenerator->generate($source)->value;
+                $drawn = $commandGenerator->generate($source);
+                $wrapped[] = $drawn;
+                $commands[] = $drawn->value;
             }
 
             // Convert the setup once per sequence (AC7): a fresh model and system from a single
@@ -101,13 +106,15 @@ final class StatefulProperty
             $result = (new SequenceRunner)->run($commands, fn () => $setup->system, $setup->model);
 
             if (! $result->passed) {
-                // AC2: the first failing sequence. Hand its run to the shrinker — the bare commands,
-                // the failing RunResult, a `freshSut` that rebuilds the system **per candidate** (so no
-                // candidate inherits another's state, the R9b leak one layer up), and the model — and
-                // report the shrunk counterexample. The Failure is the run's own: the shrinker
-                // guarantees the shrunk sequence fails the same kind (D020), and it is not re-run here.
+                // AC2: the first failing sequence. Hand its run to the shrinker — the drawn sequence as
+                // `GeneratedValue` wrappers (so each command's generation context survives for argument
+                // shrinking, SPEC-006), the failing RunResult, a `freshSut` that rebuilds the system
+                // **per candidate** (so no candidate inherits another's state, the R9b leak one layer
+                // up), and the model — and report the shrunk counterexample. The Failure is the run's
+                // own: the shrinker guarantees the shrunk sequence fails the same kind (D020), and it is
+                // not re-run here.
                 $shrunk = (new SequenceShrinker(new SequenceRunner, budget: $this->budget))->shrink(
-                    $commands,
+                    $wrapped,
                     $result,
                     fn () => ($this->setup)($initialValue)->system,
                     $setup->model,

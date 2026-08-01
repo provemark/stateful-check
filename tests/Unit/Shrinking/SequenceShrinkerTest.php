@@ -5,11 +5,28 @@ declare(strict_types=1);
 use Provemark\StatefulCheck\Command;
 use Provemark\StatefulCheck\Failure;
 use Provemark\StatefulCheck\FailureKind;
+use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\Ref;
 use Provemark\StatefulCheck\RunResult;
 use Provemark\StatefulCheck\SequenceRunner;
 use Provemark\StatefulCheck\Shrinking\SequenceShrinker;
+
+/**
+ * Wrap bare commands as the shrinker now takes them (SPEC-006): `GeneratedValue<Command>`, each with a
+ * null context — the structural family never reads it, so an empty context is faithful for these tests.
+ * Generic in the command type so a concrete `list<Cmd>` keeps its type through the wrap; `GeneratedValue`
+ * is covariant, so the wrapped list stays assignable exactly where the bare list was.
+ *
+ * @template T of Command
+ *
+ * @param  list<T>  $commands
+ * @return list<GeneratedValue<T>>
+ */
+function wrapCommands(array $commands): array
+{
+    return array_map(static fn (Command $command): GeneratedValue => new GeneratedValue($command), $commands);
+}
 
 /**
  * A minimal command double, distinguishable by label, so a filtered sequence can be asserted.
@@ -96,10 +113,10 @@ it('filters the executed subset by reading the record, with no capacity to run a
     ];
     $original = new RunResult(false, [false, true, false], new Failure(FailureKind::PostconditionFalse, 1, Cmd::class));
 
-    $subset = (new SequenceShrinker(new SequenceRunner))->executedSubset($failing, $original);
+    $subset = (new SequenceShrinker(new SequenceRunner))->executedSubset(wrapCommands($failing), $original);
 
     // Both the skipped (a) and never-reached (c) commands are gone; b remains.
-    expect(array_map(fn (Command $c): string => (string) $c, $subset))->toBe(['b']);
+    expect(array_map(fn (GeneratedValue $g): string => (string) $g->value, $subset))->toBe(['b']);
 })->group('SPEC-002');
 
 it('drops non-executed commands without running a candidate (SPEC-002 AC3)', function () {
@@ -115,7 +132,7 @@ it('drops non-executed commands without running a candidate (SPEC-002 AC3)', fun
     $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
 
     // b remains, and no candidate ran to discover the drop: the filter reads the record, it does not
@@ -132,7 +149,7 @@ it('fails loudly when the executed record does not match the sequence length', f
     $original = new RunResult(false, [true, false, true], new Failure(FailureKind::PostconditionFalse, 0, Cmd::class));
 
     expect(fn () => (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing,
+        wrapCommands($failing),
         $original,
         fn (): stdClass => new stdClass,
         null,
@@ -148,13 +165,13 @@ it('every structural candidate retains the last executed command (SPEC-002 AC4)'
         new Cmd('d'),
     ];
 
-    $candidates = iterator_to_array((new SequenceShrinker(new SequenceRunner))->candidateReductions($sequence), false);
+    $candidates = iterator_to_array((new SequenceShrinker(new SequenceRunner))->candidateReductions(wrapCommands($sequence)), false);
 
     // Non-vacuous: there is at least one genuine reduction to check the invariant against.
     expect($candidates)->not->toBeEmpty();
 
     foreach ($candidates as $candidate) {
-        $labels = array_map(fn (Command $c): string => (string) $c, $candidate);
+        $labels = array_map(fn (GeneratedValue $g): string => (string) $g->value, $candidate);
 
         // Every candidate ends with d: removing the command that caused the failure is never a
         // useful reduction, so the structural family never drops it. And it is a real reduction.
@@ -315,7 +332,7 @@ it('shrinks to a local minimum: no single further reduction still fails (SPEC-00
     $originalFailure = $original->failure ?? throw new RuntimeException('the failing sequence did not fail');
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
 
     // AC1 invariant (cross-cutting, live for the first time): the returned sequence still fails, and
@@ -333,8 +350,8 @@ it('shrinks to a local minimum: no single further reduction still fails (SPEC-00
         ->and($result->executions)->toBeGreaterThan(0)
         ->and($result->originalLength)->toBe(count($failing));
 
-    foreach ((new SequenceShrinker(new SequenceRunner))->candidateReductions($result->commands) as $candidate) {
-        $r = (new SequenceRunner)->run($candidate, $freshSut, null);
+    foreach ((new SequenceShrinker(new SequenceRunner))->candidateReductions(wrapCommands($result->commands)) as $candidate) {
+        $r = (new SequenceRunner)->run(array_map(fn (GeneratedValue $g): Command => $g->value, $candidate), $freshSut, null);
         $reproduces = ! $r->passed && $r->failure !== null && $r->failure->sameKindAs($originalFailure);
         expect($reproduces)->toBeFalse();
     }
@@ -352,7 +369,7 @@ it('does not drift to a candidate that fails for a different reason (SPEC-002 AC
     expect($originalFailure->kind)->toBe(FailureKind::PostconditionFalse);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
 
     // The returned sequence still fails the ORIGINAL kind — the loop did not accept [Blow]'s
@@ -369,7 +386,7 @@ it('fails loudly when the original run did not fail', function () {
     $passing = new RunResult(true, [true]); // a passing run has no failure to shrink toward
 
     expect(fn () => (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing,
+        wrapCommands($failing),
         $passing,
         fn (): stdClass => new stdClass,
         null,
@@ -475,7 +492,7 @@ it('clones a command between candidates, so its mutable state does not leak (SPE
     $original = new RunResult(false, [true, true, true], new Failure(FailureKind::PostconditionFalse, 2, Check::class));
 
     (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, fn (): Ref => new Ref(0), null,
+        wrapCommands($failing), $original, fn (): Ref => new Ref(0), null,
     );
 
     // Check ran in several candidates. If each candidate cloned it (R9b), it always saw its pristine
@@ -504,7 +521,7 @@ it('respects the budget: reaching the minimum within it is minimal, one short is
     // budget, so N is a valid natural cost.
     $measuringBudget = 1000;
     $unbounded = (new SequenceShrinker(new SequenceRunner, budget: $measuringBudget))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
     $n = $unbounded->executions;
     $minimum = array_map(fn (Command $c): string => (string) $c, $unbounded->commands);
@@ -516,7 +533,7 @@ it('respects the budget: reaching the minimum within it is minimal, one short is
     // limited, even though executions === budget. The flag means "stopped before the minimum", not
     // "budget reached".
     $atBudget = (new SequenceShrinker(new SequenceRunner, budget: $n))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
     expect($atBudget->budgetExhausted)->toBeFalse()
         ->and($atBudget->executions)->toBe($n)
@@ -524,7 +541,7 @@ it('respects the budget: reaching the minimum within it is minimal, one short is
 
     // Budget N - 1: one run short of confirming the minimum — budget-limited, best-so-far returned.
     $underBudget = (new SequenceShrinker(new SequenceRunner, budget: $n - 1))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
     expect($underBudget->budgetExhausted)->toBeTrue()
         ->and($underBudget->executions)->toBe($n - 1);
@@ -663,7 +680,7 @@ it('aborts shrinking when the replay path diverges — non-determinism (SPEC-002
     $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
 
     // Aborted: the original counterexample is returned unshrunk, flagged non-deterministic. The AC1
@@ -681,7 +698,7 @@ it('aborts when the replay verdict diverges though the path is identical (SPEC-0
     $original = (new SequenceRunner)->run($failing, $freshSut, null);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, $freshSut, null,
+        wrapCommands($failing), $original, $freshSut, null,
     );
 
     expect($result->abandonedNonDeterministic)->toBeTrue()

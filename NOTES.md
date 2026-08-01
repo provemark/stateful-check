@@ -1607,3 +1607,31 @@ claim is observed, not asserted. Second, the first draft said the runnable versi
 has been catching, and it was removed before commit. The bug example doubles as a live demonstration of
 two README limitations: `deposit(63)` is not shrunk to `deposit(52)` (no argument shrinking) and
 `initial=949` is held fixed (not minimised).
+
+## Step 56 — SPEC-006 step 0: the wrapper-threading migration, isolated (2026-08-01)
+
+The plumbing before the behaviour, per maurice's build-order cut: convert the shrinker's I/O to
+`GeneratedValue<Command>` wrappers with the structural semantics unchanged, green, committed — so the
+argument family (step 1) is a pure addition on top, and a red suite here is plumbing, not behaviour.
+
+`SequenceShrinker::shrink()` and its helpers (`executedSubset`, `candidateReductions`, `replay`,
+`stillFails`) now carry wrappers and unwrap only at the moment of running (`replay` clones
+`$wrapper->value`) and in the result (a new private `unwrap()`; `ShrinkResult` still renders bare
+commands). No `$alphabet` parameter yet — an unused constructor property would fail PHPStan, so it
+arrives in step 1 with the family that reads it. `StatefulProperty::check()` keeps both the bare command
+(for this run) and the wrapper (for the shrinker).
+
+Two honesties for the record, both maurice's distinctions:
+- **The red phase was the migration, not an AC8 assertion.** Changing the signature made the existing
+  tests pass bare commands into a wrapper parameter — a `TypeError` deep in `replay`, i.e. temporarily
+  broken tests, not a failing check. AC8 ("structural result identical under wrapped input") is
+  **green-on-arrival**: it is the existing SPEC-002 suite, migrated and still asserting the same minimal
+  sequences. So this is not "AC8 red-first" — there was no falsifiable AC8 red, only non-compiling tests.
+- **The migration surfaced real variance work, not a mechanical find-replace.** The test helper
+  `wrapCommands()` had to be `@template T of Command` (generic in the command type), because
+  `GeneratedValue` is `@template-covariant T`: only a type-preserving wrap keeps the wrapped list
+  assignable exactly where the bare list was. A `list<GeneratedValue<Command<mixed,mixed,mixed>>>` helper
+  failed — a concrete `list<Cmd>` is not that under invariant `Command` positions. Twelve shrink/…
+  call sites migrated (`SequenceShrinkerTest` 11 + `OrderDependentShrinkTest` 1); the SPEC-005
+  `StatefulPropertyTest` cases did **not** shift, because `check()` wraps internally and they call
+  `check()`, not the shrinker — the layer boundary absorbed it. Full suite 91 green, examples green.

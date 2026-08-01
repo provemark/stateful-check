@@ -7,6 +7,7 @@ namespace Provemark\StatefulCheck\Shrinking;
 use LogicException;
 use Provemark\StatefulCheck\Command;
 use Provemark\StatefulCheck\Failure;
+use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\RunResult;
 use Provemark\StatefulCheck\SequenceRunner;
 
@@ -18,6 +19,12 @@ use Provemark\StatefulCheck\SequenceRunner;
  * running each against a fresh system and keeping any that still fails the same way (AC2). The
  * result is a local minimum relative to those families (R3): AC2 cannot detect a family that is too
  * weak, only AC7 (a planted bug with a known minimum) can.
+ *
+ * The sequence is carried as `GeneratedValue<Command>` wrappers, not bare commands (SPEC-006): each
+ * command travels with the opaque generation context that a later family will shrink its arguments
+ * from. v0.1's structural family never reads the context — it drops and slices whole wrappers — but
+ * threading it keeps the argument family a pure addition (SPEC-006 AC8). Commands are unwrapped only
+ * at the moment of running (`replay`) and in the final result (`ShrinkResult` renders bare commands).
  *
  * The command types are method-level templates, as on `SequenceRunner` — the shrinker holds only a
  * (non-generic) runner, so there is nothing to bind at construction.
@@ -33,7 +40,7 @@ final class SequenceShrinker
      * @template TModel
      * @template TSut
      *
-     * @param  list<Command<TModel, TSut, mixed>>  $failing
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $failing
      * @param  callable(): TSut  $freshSut
      * @param  TModel  $initialModel
      * @return ShrinkResult<TModel, TSut>
@@ -69,7 +76,7 @@ final class SequenceShrinker
             || $replay->failure === null
             || ! $replay->failure->sameKindAs($baseline)) {
             return new ShrinkResult(
-                $failing,
+                $this->unwrap($failing),
                 count($failing),
                 0,
                 false,
@@ -115,7 +122,7 @@ final class SequenceShrinker
         } while ($reduced);
 
         return new ShrinkResult(
-            $current,
+            $this->unwrap($current),
             count($failing),
             $executions,
             $budgetExhausted,
@@ -129,20 +136,21 @@ final class SequenceShrinker
      * to). This reads the record and nothing else: it takes no system and no `freshSut`, so it
      * *cannot* discover the drop by trying candidates — the trial-and-error alternative is absent by
      * construction, not merely unused. Public and pure, like `candidateReductions`, so the filter can
-     * be tested in isolation from the shrink loop and from AC8's replay.
+     * be tested in isolation from the shrink loop and from AC8's replay. Operates on the wrappers so a
+     * surviving command keeps its context (SPEC-006).
      *
      * @template TModel
      * @template TSut
      *
-     * @param  list<Command<TModel, TSut, mixed>>  $failing
-     * @return list<Command<TModel, TSut, mixed>>
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $failing
+     * @return list<GeneratedValue<Command<TModel, TSut, mixed>>>
      */
     public function executedSubset(array $failing, RunResult $original): array
     {
         $subset = [];
-        foreach ($failing as $i => $command) {
+        foreach ($failing as $i => $wrapper) {
             if ($original->executed[$i]) {
-                $subset[] = $command;
+                $subset[] = $wrapper;
             }
         }
 
@@ -158,7 +166,7 @@ final class SequenceShrinker
      * @template TModel
      * @template TSut
      *
-     * @param  list<Command<TModel, TSut, mixed>>  $candidate
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $candidate
      * @param  callable(): TSut  $freshSut
      * @param  TModel  $initialModel
      */
@@ -170,20 +178,21 @@ final class SequenceShrinker
     }
 
     /**
-     * Runs a sequence against a fresh system, shallow-cloning each command first (R9b), and returns
-     * the raw result. Shared by the candidate loop (via `stillFails`) and by the non-determinism
-     * guard, so both drive a sequence through the exact same path.
+     * Runs a sequence against a fresh system, unwrapping each command from its `GeneratedValue` and
+     * shallow-cloning it first (R9b), and returns the raw result. Shared by the candidate loop (via
+     * `stillFails`) and by the non-determinism guard, so both drive a sequence through the exact same
+     * path. The context is never run, so it is never cloned — only the command is (D023).
      *
      * @template TModel
      * @template TSut
      *
-     * @param  list<Command<TModel, TSut, mixed>>  $sequence
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence
      * @param  callable(): TSut  $freshSut
      * @param  TModel  $initialModel
      */
     private function replay(array $sequence, callable $freshSut, mixed $initialModel): RunResult
     {
-        $commands = array_map(static fn (Command $command): Command => clone $command, $sequence);
+        $commands = array_map(static fn (GeneratedValue $wrapper): Command => clone $wrapper->value, $sequence);
 
         return $this->runner->run($commands, $freshSut, $initialModel);
     }
@@ -194,9 +203,8 @@ final class SequenceShrinker
      * of length `s`. The last command caused the failure, so removing it is never a useful reduction
      * and no candidate ever does (the suffix always includes it). A sequence of length 0 or 1 has no
      * reduction and yields nothing; the full sequence is never yielded (`s >= 1` always drops at
-     * least one). v0.1 has this structural family only; argument shrinking is out of scope until a
-     * later spec (the deleted `$alphabet` param and the `GeneratedValue` wrapper it needed went with
-     * it — see the SPEC-002 amendment retracting them).
+     * least one). This is the structural family; the argument family (SPEC-006) is a separate
+     * generator over the same wrappers, added alongside this one.
      *
      * This is the full family of the spec — "hold a prefix, shrink the length of the retained
      * suffix" — not just the `s = length - 1` slice (suffix fixed at the last command). Reaching a
@@ -213,8 +221,8 @@ final class SequenceShrinker
      * @template TModel
      * @template TSut
      *
-     * @param  list<Command<TModel, TSut, mixed>>  $sequence
-     * @return iterable<list<Command<TModel, TSut, mixed>>>
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $sequence
+     * @return iterable<list<GeneratedValue<Command<TModel, TSut, mixed>>>>
      */
     public function candidateReductions(array $sequence): iterable
     {
@@ -228,5 +236,21 @@ final class SequenceShrinker
                 yield [...array_slice($sequence, 0, $k), ...array_slice($sequence, $k + $s)];
             }
         }
+    }
+
+    /**
+     * The bare commands of a wrapped sequence, for the result a reader sees (`ShrinkResult` renders
+     * bare commands) and for the abort path. The context is shrink data, never part of the rendered
+     * counterexample.
+     *
+     * @template TModel
+     * @template TSut
+     *
+     * @param  list<GeneratedValue<Command<TModel, TSut, mixed>>>  $wrapped
+     * @return list<Command<TModel, TSut, mixed>>
+     */
+    private function unwrap(array $wrapped): array
+    {
+        return array_map(static fn (GeneratedValue $wrapper): Command => $wrapper->value, $wrapped);
     }
 }

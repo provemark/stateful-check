@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Provemark\StatefulCheck\Command;
+use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\SequenceRunner;
 use Provemark\StatefulCheck\Shrinking\SequenceShrinker;
@@ -156,7 +157,10 @@ it('shrinks an order-dependent bug to its known minimal sequence [Prime, Trip] (
         ->and($original->executed)->toBe([true, true, true, true]);
 
     $result = (new SequenceShrinker(new SequenceRunner))->shrink(
-        $failing, $original, $freshSut, 0,
+        array_map(static fn (Command $c): GeneratedValue => new GeneratedValue($c), $failing),
+        $original,
+        $freshSut,
+        0,
     );
 
     // The exact minimal sequence, by string form (SPEC-002 AC7).
