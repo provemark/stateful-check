@@ -474,3 +474,32 @@ only purpose was trying the probe exactly once — goes with it.
 Revisit if: invariants are ever checked *before the first command* (a start-of-run postcondition,
 or setup/initial-state failures surfaced as run failures). Then the empty sequence could fail, the
 probe becomes reachable, and it returns with a meta-test.
+
+## D023 — Argument shrinking: command/context coupling by construction, no runtime guard
+
+Spec: SPEC-006 (argument shrinking); successor to the retracted D021
+Status: **decided**
+Decided: maurice, 2026-08-01
+Decision: In SPEC-006's argument family, each candidate at a position is a whole
+`GeneratedValue<Command>` taken directly from `Generator::shrink()`, which produces the command and
+its context together. The shrinker never re-pairs a command with a foreign context and never
+constructs a command from a context it did not arrive with. Command/context coupling therefore holds
+**by construction**, and there is **no runtime matched-pair guard**.
+Alternative rejected: the retracted D021's guard (assert a candidate's command matches its context's
+provenance/class). Rejected on three counts: (1) it fires on legitimate class-changing shrinks —
+`Gen::map(fn ($n) => $n > 5 ? new Big($n) : new Small($n), integers(0, 10))` shrinks one branch across
+command classes, so a class check aborts valid shrinks; (2) it does not catch the genuine desync
+(right class, wrong context); (3) that desync is designed away by the by-construction coupling. A guard
+that fires on the legitimate and misses the real is D021's own failure mode — an invariant that sounds
+protective but guards nothing, which is why D021 "was never even implemented".
+Because: the safe pairing D021 tried to enforce at runtime is instead guaranteed by never separating
+command from context — the family yields whole `shrink()` values. The correct minimum is no guard,
+recorded honestly so the retracted guard is not reintroduced as "protection". This removes only the
+*pair* guard: the length-mismatch guard (SPEC-006 AC5 case b — `count(wrappers)` must equal the run's
+executed count, a `LogicException` otherwise) stays. That is input validation, not pair-guarding, and
+the same class as SPEC-002's existing `count(executed) === count(failing)` check; "no runtime guard"
+means no *coupling* guard, not that AC5's malformed-input guard is dropped.
+Revisit if: a future family constructs commands itself instead of taking whole `GeneratedValue`s from
+`shrink()` — e.g. branch-choice shrinking (SPEC-003 AC5, out of scope) that assembles a command from a
+foreign context — reintroducing a path where command and context can diverge. Then the by-construction
+argument no longer holds and an explicit guard is needed again.

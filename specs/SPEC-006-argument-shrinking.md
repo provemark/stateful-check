@@ -25,7 +25,7 @@ cannot minimise — `docs/tutorial.md` shows `deposit(63)` un-reduced and says s
 the README lists it first under limitations. That is the justification, and it is
 pre-existing: those counterexamples exist whether or not this spec is written.
 
-Kept deliberately apart from that: the R8 planted-bug meta-test (AC6) is the
+Kept deliberately apart from that: the R8 planted-bug meta-test (AC7) is the
 feature's *test*, not evidence for it. A bug written specifically to need argument
 shrinking would be circular justification against §4 — the feature proving its own
 necessity. The need is the real, already-shipped counterexamples above; the meta-test
@@ -83,11 +83,13 @@ shrinker gave up and this spec threads back in.
     subset of the *finally accepted* candidate, so it never contains a non-executed
     command. The up-front filter does not guarantee this on its own — the review found a
     gap the earlier "no-op drop" argument missed: a reduction can move the failure earlier
-    and leave the retained last command (AC4) non-executed, which no drop can then remove
-    (AC5). The fix is to re-filter every accepted candidate through its own replay's
+    and leave the retained last command (SPEC-002 AC4) non-executed, which no drop can then
+    remove (AC5). The fix is to re-filter every accepted candidate through its own replay's
     executed set — a general property of the shrinker's acceptance logic, so the code
-    change is owned here in SPEC-002. Its *reachable trigger* is argument-specific
-    (verified: structural-only recovers), so the failing test lives in SPEC-006 AC5.
+    change is owned here in SPEC-002. The trigger is reachable in both families; the
+    *non-recovering* case — where re-filtering is the only thing keeping the result clean —
+    is reliably constructible with argument shrinking, so the failing test lives in SPEC-006
+    AC5 (constructible there, not impossible here).
   - *SPEC-005.* `StatefulProperty` stops unwrapping the drawn `GeneratedValue<Command>`
     on failure; it retains the wrappers and hands them, plus the alphabet, to the shrinker.
 - **Migrating the existing shrinker tests** to the wrapped input: `SequenceShrinkerTest`
@@ -168,30 +170,35 @@ values on commands the structural family then throws away.
 
 - **AC5 — an accepted candidate is re-filtered to its own executed subset** *(the point the
   no-op-drop argument misses; fix lives in the shared acceptance logic)*
-  - Given an accepted candidate in which the failure moved earlier — an argument reduction
-    made a command fail before a later one it had set up, so that later command (kept by
-    AC4's last-command rule) did not execute in this candidate's replay
+  - Given an accepted candidate in which the failure moved earlier — a reduction made a
+    command fail before a later one it had set up, so that later command (kept by AC4's
+    last-command rule) did not execute in this candidate's replay
   - When the candidate is accepted
   - Then the retained representation is the executed subset of **that candidate's own
     replay**, not the parent's, so the returned counterexample never contains — and never
     ends on — a command that did not run. (`stillFails` already runs the candidate; it
     returns that `RunResult` instead of a bare bool, and acceptance re-filters through
     `executedSubset`. Cheap and unconditional.)
-  - *Reachability and placement, from the review's code investigation.* The current
-    structural loop does not exhibit this: largest-drop-first isolates the retained
-    command, and same-class structural instances share behaviour, so the isolated command
-    still fails and the result stays clean (verified empirically — `[inc,check,dec,check]`
-    shrinks to `[check]`). The argument family breaks that recovery, because same-class
-    commands with **different arguments** behave differently: `Withdraw(k)` can fail from
-    the initial state while `Withdraw(50)` needs the setup it replaced, so the isolated
-    trailing command no longer reproduces and cannot be dropped (it is the retained last).
-    So the *reachable trigger* is argument-specific, though the *fix* is a general property
-    of the shrinker. The code change is a SPEC-002 amendment (the shared acceptance logic,
-    and SPEC-002 AC3 strengthened to state the returned result is executed-only via
-    re-filtering, not the up-front filter alone); this AC is the argument-triggered test
-    that proves it necessary — the failing test can only exist once the argument family
-    does. **Open for the maintainer:** confirm this split (fix in the SPEC-002 amendment,
-    failing test here) rather than folding the whole fix into SPEC-006.
+  - *Reachability and placement, from the review's code investigation.* The **trigger** is
+    reachable in both families — the first review's "structural recovers" claim was wrong,
+    and it was an unproven unreachability claim (the class R11 guards against). A command
+    class that carries arguments has same-class instances that behave differently *at draw
+    time*, no shrinking needed: `[Deposit(10000), Withdraw(9999), Withdraw(50)]` failing at
+    the last on an empty balance, drop `Deposit` structurally, and `Withdraw(9999)` fails
+    immediately from the initial state — same class, same `FailureKind`, accepted, with the
+    retained last command never run. What differs is whether the loop then **recovers**
+    (reduces past the non-executed tail), and that is a property of the *system*, not the
+    family: it recovers when the isolated tail fails on its own (there `[Withdraw(50)]` also
+    overdraws, so the loop reaches it) and not when the tail needs the setup that just
+    vanished. The empirical `[inc,check,dec,check]` → `[check]` is one recovering case, not
+    evidence of unreachability. Argument shrinking makes the **non-recovering** case — the
+    one only re-filtering keeps clean — reliably constructible; structurally it was not
+    constructed in the cases tried. So the fix is a general property of the shrinker (the
+    SPEC-002 amendment: the shared acceptance logic, with SPEC-002 AC3 strengthened to "the
+    returned result is executed-only via re-filtering, not the up-front filter alone"), and
+    the failing test lives here because it is reliably **constructible** here — not because
+    the trigger is impossible structurally. **Confirmed with the maintainer:** fix in the
+    SPEC-002 amendment, failing test in this AC.
 
 - **AC6 — a context the alphabet cannot shrink, or a length mismatch, fails safely**
   *(required: error / malformed-input path)*
@@ -296,28 +303,27 @@ SPEC-001 (the runner) is untouched — candidates are still shallow-cloned bare 
   the **total executions over all passes on a realistic case** (the LRU example, or a
   `Deposit(9999)` overflow), not one pass at the initial length. Read it at AC7; then decide
   whether to raise the default, give the argument family its own share, or accept the flag.
-- **D021 successor — record in `DECISIONS.md` first (blocker, per §1).** The successor is
-  *not* the retracted guard; it is the recorded decision that command/context coupling
-  holds **by construction** (each candidate is a whole `GeneratedValue` from `shrink()`),
-  so no runtime guard exists and none is needed. Write it as a decision so the retracted
-  guard is not reintroduced later as "protection".
-
 ### Answered during review (kept for the record, not open)
+
+- **D021 successor — recorded as D023.** Command/context coupling holds **by construction**
+  (each candidate is a whole `GeneratedValue` from `shrink()`); no runtime *pair* guard, and
+  none needed — while AC5's length-mismatch guard (input validation, not pair-guarding) stays.
+  The §1 blocker (an open question must be answered in `DECISIONS.md` before approval) is met.
 
 - **Executed-subset interaction — investigated in code, and it re-opens a narrowed AC5.**
   Finding: the structural loop does **not** re-filter per candidate — it filters once up
   front (`executedSubset`, on `$original->executed`) and an accepted candidate becomes
   `$current` directly. The first review argued this was harmless via a "no-op drop"
   argument (a skipped command's drop reproduces, so it is always droppable). **That argument
-  has a gap on the last position**, which AC4's last-command rule never drops — so an
+  has a gap on the last position**, which SPEC-002 AC4's last-command rule never drops — so an
   accepted candidate can end on a command that did not run, and no drop removes it. The
-  structural loop does not hit this in practice (verified: `[inc,check,dec,check]` → `[check]`,
-  because same-class structural instances share behaviour, so the isolated trailing command
-  still fails), but the argument family does (same class, different argument → the trailing
-  command needs the setup its predecessor's reduction removed). So AC5 returns, narrowed to
-  the real fix — re-filter each accepted candidate to its own executed subset — with the fix
-  owned by the SPEC-002 amendment and the failing test owned here (AC5), because the trigger
-  is argument-specific.
+  trigger is reachable in **both** families (a same-class command carrying arguments already
+  behaves differently at draw time — see AC5's `[Deposit, Withdraw(9999), Withdraw(50)]`); the
+  `[inc,check,dec,check]` → `[check]` recovery is one system where the isolated tail happens to
+  fail on its own, not proof of structural unreachability. What argument shrinking adds is a
+  reliably **constructible non-recovering** case. So AC5 returns, narrowed to the real fix —
+  re-filter each accepted candidate to its own executed subset — with the fix owned by the
+  SPEC-002 amendment and the failing test owned here (AC5), because it is constructible here.
 - **Family ordering — decided** (structural first; see the Design decision above).
 - **R10 gate — verified.** Heterogeneous `list<GeneratedValue<Command<M, S, mixed>>>`
   type-checks at PHPStan max (throwaway check, 2026-08-01).
