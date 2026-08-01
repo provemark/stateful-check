@@ -1703,3 +1703,21 @@ reading; this one only showed when the planted bug refused to plant. That says w
 gate reaches and where it does not: R11 at approval checks the AC's *shape* is fulfillable, but whether a
 *planted-system* trigger is constructible can need the machinery to exist first. The catch still worked —
 just one layer later than the gate intends.
+
+## Step 59 — SPEC-006 AC4: proving termination without hanging (2026-08-01)
+
+Termination is the AC with the nastiest failure mode, and maurice named it: a test that merely completes
+proves only that *this* case ended, and a non-terminating loop does not fail — it **hangs** until the
+suite is killed. A defect that yields a hang instead of a red is the worst outcome. (Compounded here:
+`timeout` is not on macOS by default — it is `gtimeout` — so "just wrap it in a timeout" would have
+silently not run at all, which it did once mid-build.)
+
+So AC4 asserts the **measure**, not the completion. The lexicographic measure is (length, then the sum of
+distances-to-origin); the argument family is length-preserving, so only the distance-sum can move, and it
+must **strictly** fall or the loop could accept a non-progressing candidate forever. The test iterates
+`argumentReductions` directly and asserts each candidate's distance-sum is strictly below its parent's —
+which checks the exact property the proof rests on **without running the accept loop**, so a family that
+failed to decrease reddens an assertion ("142 is less than 142") instead of hanging. A second test runs
+the full shrink at a deliberately huge budget and asserts `budgetExhausted === false`: it stops on the
+measure, not the bound. The hang-inducing mutant is run only against the measure test (which cannot hang),
+never the loop test — the measure assertion catches it safely, which is the whole point of preferring it.

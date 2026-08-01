@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Provemark\StatefulCheck\Command;
 use Provemark\StatefulCheck\Generation\Gen;
+use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Generation\Source;
 use Provemark\StatefulCheck\Outcome;
 use Provemark\StatefulCheck\SequenceRunner;
@@ -108,4 +109,57 @@ it('yields length-preserving, single-position candidates — the alphabet shrink
         }
         expect($differing)->toBe(1);
     }
+})->group('SPEC-006');
+
+it('every argument reduction strictly lowers the (length, distance-to-origin) measure (SPEC-006 AC4)', function () {
+    // The measure the termination proof rests on, asserted directly — because a test that merely completes
+    // proves only that this case ended, and a family that failed to strictly decrease would hang the loop
+    // (accept a non-progressing candidate forever), which never reddens, it just runs until the suite is
+    // killed. Iterating `argumentReductions` here checks the measure WITHOUT running the accept loop, so a
+    // non-decreasing candidate fails an assertion instead of hanging. The family is length-preserving, so
+    // only the distance-to-origin sum can move; the range floor is the origin (1), so distance is amount − 1.
+    $alphabet = Gen::alphabet([
+        Gen::map(fn (int $n): Overdraw => new Overdraw($n), Gen::integers(1, 100)),
+    ]);
+    $sequence = [$alphabet->generate(Source::seeded(7)), $alphabet->generate(Source::seeded(3))];
+
+    $amountOf = function (mixed $wrapper): int {
+        return $wrapper instanceof GeneratedValue && $wrapper->value instanceof Overdraw ? $wrapper->value->amount : 0;
+    };
+    $sumOf = fn (array $wrappers): int => array_sum(array_map($amountOf, $wrappers));
+
+    $parent = $sumOf($sequence);
+    $candidates = iterator_to_array(
+        (new SequenceShrinker(new SequenceRunner))->argumentReductions($sequence, $alphabet),
+        false,
+    );
+
+    expect($candidates)->not->toBeEmpty();
+    foreach ($candidates as $candidate) {
+        expect(count($candidate))->toBe(count($sequence))     // length component unchanged
+            ->and($sumOf($candidate))->toBeLessThan($parent);  // distance-to-origin sum strictly lower
+    }
+})->group('SPEC-006');
+
+it('the shrink loop terminates on its own, without the budget biting (SPEC-006 AC4)', function () {
+    // Both commands always fail and both are reducible, so the length-preserving argument family runs; a
+    // deliberately huge budget cannot be the reason the loop stops. Reaching the assertion means it
+    // terminated, and `budgetExhausted === false` means it stopped on the measure, not the bound — which is
+    // what "termination does not rest on the budget" requires.
+    $alphabet = Gen::alphabet([
+        Gen::map(fn (int $n): Overdraw => new Overdraw($n), Gen::integers(1, 100)),
+    ]);
+    $sequence = [$alphabet->generate(Source::seeded(7)), $alphabet->generate(Source::seeded(11))];
+    $freshSut = fn (): ?object => null;
+    $original = (new SequenceRunner)->run(array_map(fn (GeneratedValue $w): Command => $w->value, $sequence), $freshSut, null);
+
+    $result = (new SequenceShrinker(new SequenceRunner, budget: 100_000))->shrink(
+        $sequence,
+        $original,
+        $freshSut,
+        null,
+        $alphabet,
+    );
+
+    expect($result->budgetExhausted)->toBeFalse();
 })->group('SPEC-006');
