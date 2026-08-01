@@ -163,3 +163,45 @@ it('the shrink loop terminates on its own, without the budget biting (SPEC-006 A
 
     expect($result->budgetExhausted)->toBeFalse();
 })->group('SPEC-006');
+
+it('yields no argument candidates for a value already at its origin (SPEC-006 AC6, case a)', function () {
+    // The normal end of every shrink, not an error path — `overdraw(1)` has no smaller value that still
+    // fails — so green on arrival (AC1 and AC4 already reach it). The pin: an origin value yields nothing
+    // and the family simply moves on, rather than throwing or fabricating a command.
+    $alphabet = Gen::alphabet([
+        Gen::map(fn (int $n): Overdraw => new Overdraw($n), Gen::integers(1, 100)),
+    ]);
+    $reducible = $alphabet->generate(Source::seeded(7));   // overdraw(93)
+    $atOrigin = null;
+    foreach ($alphabet->shrink($reducible) as $shrunk) {
+        if ((string) $shrunk->value === 'overdraw(1)') {
+            $atOrigin = $shrunk;
+            break;
+        }
+    }
+    if ($atOrigin === null) {
+        throw new RuntimeException('could not obtain an origin (overdraw(1)) wrapper — generation changed.');
+    }
+
+    $candidates = iterator_to_array(
+        (new SequenceShrinker(new SequenceRunner))->argumentReductions([$atOrigin], $alphabet),
+        false,
+    );
+    expect($candidates)->toBeEmpty();
+})->group('SPEC-006');
+
+it('lets a generator context error propagate, never swallows it (SPEC-006 AC6, case c)', function () {
+    // A wrapper whose context the alphabet cannot read is a generator/usage bug. The family lets the
+    // LogicException propagate — loud — rather than catching it and silently skipping the position, which
+    // would be the exact silent degradation this package exists to prevent. Green on arrival (there is no
+    // catch); mutant-proven — a swallowing try/catch around `$alphabet->shrink()` reddens this.
+    $alphabet = Gen::alphabet([
+        Gen::map(fn (int $n): Overdraw => new Overdraw($n), Gen::integers(1, 100)),
+    ]);
+    $badContext = new GeneratedValue(new Overdraw(5), 'not a [int, GeneratedValue] context');
+
+    expect(fn () => iterator_to_array(
+        (new SequenceShrinker(new SequenceRunner))->argumentReductions([$badContext], $alphabet),
+        false,
+    ))->toThrow(LogicException::class);
+})->group('SPEC-006');

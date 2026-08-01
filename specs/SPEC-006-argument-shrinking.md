@@ -5,6 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-08-01                               |
+| Amended    | maurice, 2026-08-01 — AC6 gains a third case (c): when `AlphabetGenerator::shrink()` throws on a malformed context or an out-of-range branch index, the argument family **lets it propagate** (loud) rather than swallowing it — a generator/usage bug must fail loudly. Decided during the build (the existing behaviour: the family has no `try/catch`); the review flagged it as worth deciding rather than letting happen. Also clarified: case (b)'s length guard is the **existing** SPEC-002 guard on the wrapped list — there is no separate second list, `$failing` is the wrappers. |
 | Amended    | maurice, 2026-08-01 — the argument alphabet is a **parameter of `shrink()`**, not a constructor collaborator as the API sketch first drew it. A class-level alphabet cannot share `shrink()`'s method templates: a concretely-typed `Generator<Command<null, null, mixed>>` is not assignable to a class-level `Generator<Command<mixed, mixed, mixed>>` under `Command`'s invariance, so the shrinker's own tests could not construct it (verified at PHPStan max). As a method parameter it binds per call, like `$freshSut`/`$initialModel`, and the alphabet belongs to the sequence being shrunk. `null` is a contract — "shrink structurally only" — not a forgotten value. Illustrative sketch only, but recorded because it corrects the sketch. |
 | Supersedes | —                                                 |
 | Amends     | SPEC-002 (AC2's local-minimum wording; AC3 clarified — the *returned* result is executed-only via the reduction loop, not the up-front filter alone) and SPEC-005 (`StatefulProperty` retains `GeneratedValue` wrappers and passes the alphabet to the shrinker). Both are `implemented`, so these are formal amendments approved together with this spec. |
@@ -205,20 +206,29 @@ values on commands the structural family then throws away.
     assumption (the property is otherwise conditional on the two choices above, adjusted twice
     already), not speculative generality.
 
-- **AC6 — a context the alphabet cannot shrink, or a length mismatch, fails safely**
-  *(required: error / malformed-input path)*
-  - Given either (a) a position whose `GeneratedValue` the alphabet yields no shrinks for
-    (a value already at the origin, or a command with no reducible argument), or (b) a
-    `list<GeneratedValue>` whose length does not equal the run's executed count
+- **AC6 — a value that cannot shrink, a length mismatch, and a generator error each behave
+  safely** *(required: error / malformed-input path)* *(amended 2026-08-01: case (c) added)*
+  - Given (a) a position whose value the alphabet yields no shrinks for (a value at the origin,
+    or a command with no reducible argument); (b) a wrapped sequence whose length does not equal
+    the run's executed count; or (c) a wrapper whose context the alphabet cannot read (wrong
+    shape, or a branch index out of range)
   - When the argument family is applied
-  - Then case (a) yields **no candidates** for that position and shrinking proceeds — it
-    never throws, never fabricates a command, never leaves the position changed; and case
-    (b) throws a `LogicException` before any candidate runs, the same loud-not-silent
-    guard SPEC-002 already applies to `count(executed) === count(failing)`. (There is
-    deliberately **no** class-mismatch guard: a shrink that changes a command's class
-    within one branch — `Gen::map(fn ($n) => $n > 5 ? new Big($n) : new Small($n), …)` —
-    is legitimate, so guarding on class would abort valid shrinks while still not
-    catching a context desync; coupling is handled by construction instead, see Scope.)
+  - Then — **and the three cases are different in nature**:
+    - (a) is the **normal end of every shrink**, not an error: the family yields **no candidates**
+      for that position and simply moves on — no throw, no fabricated command, no change. It is
+      green on arrival (AC1 and AC4 reach it inevitably); the pin is that it yields nothing *and*
+      the loop continues.
+    - (b) is the **existing** SPEC-002 guard, not a new one: since step 0 the shrinker's `$failing`
+      **is** the wrapped list (there is no separate second list), so `count(executed) === count($failing)`
+      already checks the wrappers, throwing a `LogicException` before any candidate runs.
+    - (c) is the **new** decision: `AlphabetGenerator::shrink()` throws on a malformed context or an
+      out-of-range index, and the family **lets that propagate** — loud — rather than catching it and
+      silently skipping the position. A swallow would be exactly the silent degradation the package
+      exists to prevent; a generator/usage bug must fail loudly, as the generators themselves do.
+  - (There is deliberately **no** class-mismatch guard: a shrink that changes a command's class
+    within one branch — `Gen::map(fn ($n) => $n > 5 ? new Big($n) : new Small($n), …)` — is
+    legitimate, so guarding on class would abort valid shrinks while still not catching a context
+    desync; coupling is handled by construction instead, see Scope and D023.)
 
 - **AC7 — a planted bug shrinks to its exact minimal argument value** *(R8)*
   - Given a system with a bug that fires only for an argument at or above a threshold
@@ -345,7 +355,7 @@ one test; every source file maps back to this spec.
 | AC3                  | —                           | —                    |
 | AC4                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "every argument reduction strictly lowers the (length, distance-to-origin) measure" (the proof-property, directly checkable — a non-decreasing candidate reddens it *without hanging*, mutant-proven: "142 is less than 142") + "the shrink loop terminates on its own, without the budget biting" (`budgetExhausted === false` at a huge budget) (SPEC-006) | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (each candidate strictly closer to origin), the accept loop (structural strictly shorter + argument strictly closer → the lexicographic measure falls) |
 | AC5                  | `tests/Meta/ArgumentShrinkExecutedSubsetTest.php` :: "never returns a counterexample containing a non-executed command — the argument-family tripwire" (groups `meta`, `SPEC-006`) — a **tripwire**, not mutant-proven (the violation is not currently constructible; see the reachability finding) | `src/Shrinking/SequenceShrinker.php` :: `stillFails` (returns the `RunResult`), the accept loop (re-filters the accepted candidate via `executedSubset`) — unconditional hardening, no red-first test (a marked exception, gated by the tripwire) |
-| AC6                  | —                           | —                    |
+| AC6                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "yields no argument candidates for a value already at its origin" (case a, green on arrival) + "lets a generator context error propagate, never swallows it" (case c, green on arrival; mutant-proven — a swallowing `try/catch` reddens it); case (b) is the existing SPEC-002 guard, tested by `SequenceShrinkerTest` :: "fails loudly when the executed record does not match…" (migrated to wrapped form in step 0) | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (no candidates at origin; no `try/catch`, so `$alphabet->shrink()` throws propagate), `::shrink` (the `count(executed) === count($failing)` guard) |
 | AC7                  | —                           | —                    |
 | AC8                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` (all, migrated to `wrapCommands()`) + `tests/Meta/OrderDependentShrinkTest.php` :: "shrinks an order-dependent bug to its known minimal sequence" (SPEC-002) — the existing structural suite, green-on-arrival under wrapped input | `src/Shrinking/SequenceShrinker.php` :: `shrink`/`executedSubset`/`candidateReductions`/`replay` carry `GeneratedValue<Command>`, `unwrap()` renders bare; `src/StatefulProperty.php` :: `check` retains the wrappers and passes them to the shrinker |
 | AC9                  | —                           | —                    |
