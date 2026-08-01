@@ -503,3 +503,33 @@ Revisit if: a future family constructs commands itself instead of taking whole `
 `shrink()` — e.g. branch-choice shrinking (SPEC-003 AC5, out of scope) that assembles a command from a
 foreign context — reintroducing a path where command and context can diverge. Then the by-construction
 argument no longer holds and an explicit guard is needed again.
+
+## D024 — No string generator yet; it arrives only with a free-text consumer, and never without its shrink
+
+Spec: generation (SPEC-003); the argument family (SPEC-006) is why the shrink is now inseparable
+Status: **decided**
+Decided: maurice, 2026-08-01
+Decision: The generator set stays `integers`, `constant`, `elements`, `map`, `associative`, `alphabet`.
+No general **string** generator is added now. `elements([...])` already covers a *fixed* set of strings
+(enum-like choices — the dogfood's agent names); what is absent is a generator for *free* strings —
+arbitrary characters, lengths, unicode — which you would want only when a command argument is a genuinely
+open text field (a parser, a name/input field). It is not added because no case needs it (§4): this is a
+**stateful** tester, its generators exist to make command arguments, and rich value generation is
+deliberately Eris's job (README; R7 — owned generation, no runtime deps, only what the sequences need).
+The crucial part, in the decision not an aside: **since SPEC-006 a string generator is inseparable from
+its `shrink()`.** A `strings()` without a shrink that reduces length *and* simplifies characters toward an
+origin (the empty string, or a single simple char) would drop an un-shrinkable `string("…9999 chars…")`
+into a counterexample — reintroducing exactly the boundary SPEC-006 just removed for `integers`. So the
+work is not "add a generator" but "add a generator **and** its origin-ward shrink"; the shrink is the real
+cost and must be built *with* it, never deferred. A shrink-less string generator would be worse than its
+absence, because it silently degrades the SPEC-006 guarantee for string arguments.
+Alternative rejected: add it now for completeness/maturity. Rejected — speculative generality (§4), the
+same test the 2026-07-30 combinator audit applied.
+Because: the generator set earns its place against the two dogfood suites, not against a feature checklist.
+Note — this is a *different* case from the audit's removals: `bool`, `oneOf`, `filter`, `tuple`, `vector`
+were *removed* (they existed and were audited out — see SPEC-003's scope/out-of-scope, the single place
+recording "which combinators do not exist and why"). The string generator **never existed**; this entry
+records a deliberate non-addition, not a removal, which is why it lives here and not there.
+Revisit if: a concrete case appears with a **free text field as a command argument** — a parser command, a
+name/input field, or the separate AI-generated-code verification package that will build on this engine.
+Then add `strings()` **with** its origin-ward `shrink()`, via a spec, with that case as the named consumer.
