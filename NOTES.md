@@ -1721,3 +1721,25 @@ failed to decrease reddens an assertion ("142 is less than 142") instead of hang
 the full shrink at a deliberately huge budget and asserts `budgetExhausted === false`: it stops on the
 measure, not the bound. The hang-inducing mutant is run only against the measure test (which cannot hang),
 never the loop test — the measure assertion catches it safely, which is the whole point of preferring it.
+
+## Step 60 — SPEC-006 AC7: a two-family planted bug, and a measured refutation of a worst-case formula (2026-08-01)
+
+AC7's planted bug needs **both** families, which is what makes it the argument-family analogue of
+SPEC-002 AC7 rather than an argument test in isolation: it fires only when a `prime` has armed a system
+flag AND an `amount` carries a value ≥ 50, wrapped in droppable noise. It shrinks to `[prime, amount(50)]`
+only if the structural family removes the noise and keeps the prime, and the argument family lowers the
+value to the threshold (49 passes) — so the exact result proves the two families cooperate under the
+structure-first order. (Class-collision aside: `Noise`/`Prime` already exist in `SequenceShrinkerTest`, so
+the doubles here are `Filler`/`Arm` — Pest loads all test files into one namespace, so duplicate top-level
+class names fatal at suite load, not just in the isolated run.)
+
+The budget decision (keep 100) is worth its own note for the **measured refutation**. When the budget
+open-question was reframed, I predicted the default would bite within one pass — `L·(L−1)/2 + L·k ≈ 115`
+for L=10 — and `budgetExhausted` become the normal state. Measured, the realistic case is **28**; the
+loop rarely enumerates a full family because each acceptance restarts on a shorter sequence, so most
+passes stop early (the exact objection maurice raised at the time). The worst-case formula was mistaken
+for an expectation. The default holds because short minimums are the norm; it fails for structurally-long
+minimums, and the Revisit if now carries the measured boundary (218 at length 8, 309 at length 10) so the
+next reader need not re-measure. The decision leads with D007 — the budget is for expensive systems, where
+100 is already a lot, and raising it to comfort cheap in-memory long-minimum runs would penalise exactly
+the expensive systems the budget exists for.

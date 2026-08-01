@@ -322,18 +322,28 @@ SPEC-001 (the runner) is untouched — candidates are still shallow-cloned bare 
 
 ## Open questions
 
-- **Budget default — a decision due before `implemented` (not before approval).** Measuring
-  needs the feature (the prototype *is* the argument family), so "measure before approval"
-  would be circular; it is one number with no design consequences, so deciding it late costs
-  nothing. Decide it once AC7's meta-case runs and a real total can be read. And the earlier
-  `L·(L−1)/2 + L·k` figure was a misleading per-pass worst case: the loop rarely enumerates a
-  full family, because acceptance restarts on a *shorter* sequence, so most passes stop early.
-  The expensive pass is the **last** — the one that confirms the minimum by enumerating
-  everything without accepting — and there `L` is already small. So the meaningful number is
-  the **total executions over all passes on a realistic case** (the LRU example, or a
-  `Deposit(9999)` overflow), not one pass at the initial length. Read it at AC7; then decide
-  whether to raise the default, give the argument family its own share, or accept the flag.
 ### Answered during review (kept for the record, not open)
+
+- **Budget default — keep 100** (decided at AC7, measured 2026-08-01). In order of weight:
+  1. *D007 first, and strongest.* The budget exists to bound **expensive** systems (a slow
+     `run()` — HTTP, a real service), where 100 candidate executions is already a lot. Raising it
+     to ~350 (to cover a full maxLength confirming pass) would penalise exactly the cases the
+     budget is *for*, to comfort cheap in-memory runs that do not need it.
+  2. *The signal stays meaningful.* Measured on the realistic AC7 case: **28** executions — so
+     `budgetExhausted` stays false for the short minimums shrinking normally produces, and "not a
+     confirmed minimum" keeps its signal. It bites only on long, almost-everything-needed minimums.
+  3. *It is configurable.* A user with structurally-long minimums raises it themselves.
+- *A measured refutation, recorded so it is not re-learned.* The earlier `L·(L−1)/2 + L·k` figure
+  predicted the default would bite *within one pass* and `budgetExhausted` become the normal state.
+  It does not — **28 measured against ~115 predicted** — because the loop rarely enumerates a full
+  family: each acceptance restarts on a *shorter* sequence, so most passes stop early (exactly the
+  objection raised when the estimate was made). Kept not as a correction but so a worst-case formula
+  is not mistaken for an expectation next time.
+- **Revisit if** a system's minimums are **structurally long** — nearly every command needed and
+  nearly every value near-minimal — which makes 100 unusable. Measured: a full confirming pass is
+  **218 executions at length 8** and **309 at length 10** (the default maxLength). A tool used mostly
+  on such systems should raise the default or make the budget adaptive; 100 rests on the *usage*
+  assumption that long-all-needed minimums are the exception, not on a property of the code.
 
 - **D021 successor — recorded as D023.** Command/context coupling holds **by construction**
   (each candidate is a whole `GeneratedValue` from `shrink()`); no runtime *pair* guard, and
@@ -369,6 +379,6 @@ one test; every source file maps back to this spec.
 | AC4                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "every argument reduction strictly lowers the (length, distance-to-origin) measure" (the proof-property, directly checkable — a non-decreasing candidate reddens it *without hanging*, mutant-proven: "142 is less than 142") + "the shrink loop terminates on its own, without the budget biting" (`budgetExhausted === false` at a huge budget) (SPEC-006) | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (each candidate strictly closer to origin), the accept loop (structural strictly shorter + argument strictly closer → the lexicographic measure falls) |
 | AC5                  | `tests/Meta/ArgumentShrinkExecutedSubsetTest.php` :: "never returns a counterexample containing a non-executed command — the argument-family tripwire" (groups `meta`, `SPEC-006`) — a **tripwire**, not mutant-proven (the violation is not currently constructible; see the reachability finding) | `src/Shrinking/SequenceShrinker.php` :: `stillFails` (returns the `RunResult`), the accept loop (re-filters the accepted candidate via `executedSubset`) — unconditional hardening, no red-first test (a marked exception, gated by the tripwire) |
 | AC6                  | `tests/Unit/Shrinking/ArgumentShrinkTest.php` :: "yields no argument candidates for a value already at its origin" (case a, green on arrival) + "lets a generator context error propagate, never swallows it" (case c, green on arrival; mutant-proven — a swallowing `try/catch` reddens it); case (b) is the existing SPEC-002 guard, tested by `SequenceShrinkerTest` :: "fails loudly when the executed record does not match…" (migrated to wrapped form in step 0) | `src/Shrinking/SequenceShrinker.php` :: `argumentReductions` (no candidates at origin; no `try/catch`, so `$alphabet->shrink()` throws propagate), `::shrink` (the `count(executed) === count($failing)` guard) |
-| AC7                  | —                           | —                    |
+| AC7                  | `tests/Meta/ArgumentPlantedBugShrinkTest.php` :: "shrinks a planted bug needing both families to its exact minimal sequence and value" (groups `meta`, `SPEC-006`) — the bug fires only with a `prime` (flag) AND `amount >= 50`, so it shrinks to `[prime, amount(50)]` only if the structural family drops the noise/keeps prime AND the argument family lowers the value to the threshold. **Budget:** measured (not a test) — 28 executions here; default kept at 100 (see Open questions, resolved) | `src/Shrinking/SequenceShrinker.php` :: the accept loop over both families (`candidates()`), structure-first; `::$budget` default 100 |
 | AC8                  | `tests/Unit/Shrinking/SequenceShrinkerTest.php` (all, migrated to `wrapCommands()`) + `tests/Meta/OrderDependentShrinkTest.php` :: "shrinks an order-dependent bug to its known minimal sequence" (SPEC-002) — the existing structural suite, green-on-arrival under wrapped input | `src/Shrinking/SequenceShrinker.php` :: `shrink`/`executedSubset`/`candidateReductions`/`replay` carry `GeneratedValue<Command>`, `unwrap()` renders bare; `src/StatefulProperty.php` :: `check` retains the wrappers and passes them to the shrinker |
 | AC9                  | —                           | —                    |
