@@ -2,7 +2,7 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | approved                                          |
+| Status     | implemented                                       |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-08-02 (original + amendment)        |
 | Supersedes | —                                                 |
@@ -167,6 +167,6 @@ least one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
-| AC2                  | —                           | —                    |
-| AC3                  | —                           | —                    |
+| AC1 — passing asserts cleanly | `tests/Unit/Testing/AssertPropertyPassedTest.php` :: "asserts cleanly on a passing property result" (`SPEC-007`) | `testing/assertions.php` :: `assertPropertyPassed()` (pass path) |
+| AC2 — failing renders the artefact | `tests/Unit/Testing/AssertPropertyFailedRendersTest.php` :: "fails the test with counterexampleAsString() as the message" (`SPEC-007`) | `testing/assertions.php` :: `assertPropertyPassed()` (`Assert::fail` branch) |
+| AC3 — runtime needs no framework | `tests/Unit/Testing/RuntimeIsFrameworkFreeTest.php` :: "imports no PHPUnit or Pest symbol anywhere under src/" (`SPEC-007`, `arch`) | `testing/assertions.php` living outside the `src/` PSR-4 root; `composer.json` autoload (`Provemark\StatefulCheck\` → `src/` only) |
