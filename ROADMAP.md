@@ -152,9 +152,11 @@ than one, and they are small enough not to guess at:
 ## Deliberately not in v0.1
 
 - SPEC-004, the optional Eris adapter. Recorded, unscheduled.
-- SPEC-007, the optional Pest `toPass()` expectation. Approved 2026-08-02 but
-  unscheduled: convenience test-sugar over `PropertyResult`, no runtime dependency
-  (R7 — Pest stays `require-dev`/`suggest`), built after v0.1 ships.
+- SPEC-007, the optional typed `assertPropertyPassed()` helper. Approved
+  2026-08-02, amended the same day (the sketched Pest `toPass()` expectation could
+  not clear PHPStan max, so a framework-agnostic typed helper replaces it).
+  Convenience test-sugar over `PropertyResult`, no runtime dependency (R7 — PHPUnit
+  stays `require-dev`).
 - Forkable generation sources — removed from SPEC-003 as speculative.
 - Symbolic results (R9a), parallel or scheduled interleaving (R5), a
   general-purpose generator library (SPEC-003 out of scope).
