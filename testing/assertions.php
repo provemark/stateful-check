@@ -15,9 +15,10 @@ use Provemark\StatefulCheck\PropertyResult;
  * PHP-only (R7 / AC3). A consumer registers it with one require_once from their test
  * bootstrap; the package's own suite does the same via tests/Pest.php.
  *
- * The pass assertion and the rendered reproduction artefact are one call: on failure
- * the message carries seed, initial and the counterexample, so the seed cannot be
- * dropped — the footgun this spec removes.
+ * On failure the message is exactly the rendered reproduction artefact — seed,
+ * initial and counterexample — so the seed cannot be dropped (the footgun this spec
+ * removes). Assert::fail sets that message verbatim; Assert::assertTrue would append
+ * PHPUnit's own "Failed asserting that false is true." and bury the artefact.
  *
  * The helper reads only `passed` and `counterexampleAsString()`, neither of which
  * depends on the model, system or initial type. It is generic in all three so it
@@ -33,5 +34,11 @@ use Provemark\StatefulCheck\PropertyResult;
  */
 function assertPropertyPassed(PropertyResult $result): void
 {
-    Assert::assertTrue($result->passed, $result->counterexampleAsString());
+    if (! $result->passed) {
+        Assert::fail($result->counterexampleAsString());
+    }
+
+    // The pass path still records an assertion, so the test is not flagged risky for
+    // asserting nothing (phpunit.xml failOnRisky).
+    Assert::assertTrue($result->passed);
 }
