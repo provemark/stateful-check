@@ -165,3 +165,29 @@ it('reports a budget-limited shrink as not a confirmed minimum (SPEC-008 AC5)', 
         ->and($limited->confirmedMinimum)->toBeFalse()
         ->and($limited->counterexample)->toBeGreaterThan(500_000);   // R2: still fails, but not the minimum
 })->group('SPEC-008');
+
+it('re-checks the counterexample once and reports a non-deterministic verdict flip (SPEC-008 AC6)', function () {
+    $evals = [];
+    $property = new StatelessProperty(
+        generator: Gen::integers(0, 1_000_000),
+        // Unstable: fails the first time each value is evaluated, passes on every later evaluation of it.
+        predicate: function (int $n) use (&$evals): bool {
+            $evals[$n] = ($evals[$n] ?? 0) + 1;
+
+            return $evals[$n] > 1;
+        },
+        runs: 100,
+    );
+
+    $result = $property->check(seed: 12345);
+
+    // Each value fails on first sight, so the shrink accepts the origin (0) immediately. The single
+    // re-check of 0 then flips to passing, so the run is reported non-deterministic — not a clean
+    // counterexample — and does not throw (R4/D026). `evals[0] === 2` (one accept + one re-check) proves
+    // the re-check ran exactly once, on the reported value only.
+    expect($result->passed)->toBeFalse()
+        ->and($result->nonDeterministic)->toBeTrue()
+        ->and($result->confirmedMinimum)->toBeFalse()
+        ->and($result->counterexample)->toBe(0)
+        ->and($evals[0])->toBe(2);
+})->group('SPEC-008');

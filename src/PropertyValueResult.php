@@ -9,14 +9,16 @@ namespace Provemark\StatefulCheck;
  * not SPEC-005's PropertyResult reused: that carries a command list, a drawn initial state and a
  * runner Failure, none of which a single-value property has.
  *
- * It carries the verdict, the seed, on a failure the shrunk counterexample value, and
- * `$confirmedMinimum` — whether that counterexample is a confirmed local minimum. The
- * non-determinism flag (AC6) arrives with its own AC.
+ * It carries the verdict, the seed, on a failure the shrunk counterexample value, `$confirmedMinimum`
+ * — whether that counterexample is a confirmed local minimum — and `$nonDeterministic`.
  *
  * `$confirmedMinimum` is `false` when the shrink stopped at its budget before reaching a local minimum
- * (AC5): the counterexample is then the best value found so far, and the tool may not claim it minimal
- * (R3). It is only meaningful when there is a counterexample; on a pass there is none, so it stays at
- * its `true` default rather than describing a value that does not exist.
+ * (AC5) OR the non-determinism guard fired (AC6): the counterexample is then not something the tool may
+ * claim minimal (R3). `$nonDeterministic` distinguishes the two — `true` when re-checking the reported
+ * counterexample flipped its verdict (AC6/D026), so the counterexample would not reproduce; `false` for
+ * a budget-limited (but stable) counterexample. Both are only meaningful when there is a counterexample;
+ * on a pass there is none, so they stay at their defaults rather than describing a value that does not
+ * exist.
  *
  * @template T
  */
@@ -32,5 +34,6 @@ final readonly class PropertyValueResult
         public int $seed,
         public mixed $counterexample = null,
         public bool $confirmedMinimum = true,
+        public bool $nonDeterministic = false,
     ) {}
 }

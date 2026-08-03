@@ -67,11 +67,18 @@ final class StatelessProperty
                 // the counterexample is the best found so far, flagged not a confirmed minimum.
                 [$counterexample, $confirmedMinimum] = $this->shrink($generated);
 
+                // AC6/D026: re-check the reported counterexample exactly once. A predicate whose verdict
+                // flips (the value now passes) is non-deterministic — the counterexample would not
+                // reproduce — so report it as a qualification, not a clean minimum (R4). The stateless
+                // analogue of SPEC-002 AC8's replay-path check, which this runner has no path for.
+                $nonDeterministic = ($this->predicate)($counterexample->value) !== false;
+
                 return new PropertyValueResult(
                     passed: false,
                     seed: $seed,
                     counterexample: $counterexample->value,
-                    confirmedMinimum: $confirmedMinimum,
+                    confirmedMinimum: $confirmedMinimum && ! $nonDeterministic,
+                    nonDeterministic: $nonDeterministic,
                 );
             }
         }

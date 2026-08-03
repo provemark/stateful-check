@@ -1817,3 +1817,21 @@ case and budget 1 for the limited one. The general point: a single-value integer
 ~O(log² range) executions, so for realistic ranges it stays under 100 and the budget rarely bites — the
 opposite pressure from SPEC-006, where a structurally-long *sequence* minimum can exhaust it (Step 60's
 218-at-length-8). Same default, different headroom, because the stateless case shrinks one value, not a list.
+
+## Step 64 — SPEC-008 AC6: testing non-determinism deterministically (2026-08-03)
+
+The re-check itself is three lines (D026): after the shrink settles, evaluate the predicate once more on
+the reported value; a flipped verdict sets `nonDeterministic` and clears `confirmedMinimum`. It is the
+stateless stand-in for SPEC-002 AC8's replay-path divergence check — this runner has no execution path,
+only the predicate's verdict, so the reported value's verdict-stability is the only signal available
+(the D026/AC3 argument again: what the stateful side detects via the path, the stateless side can only
+detect on the one value it reports).
+
+The finding worth keeping is the **test technique**, because "test that non-determinism is detected"
+sounds self-contradictory — a test must be deterministic. Resolved with a predicate that is a
+deterministic *function of its call count per value*: it fails the first time it sees each value and
+passes on every later evaluation of that same value. That is reproducible, yet its verdict on the
+reported value flips exactly when the runner re-checks it. A side effect makes the assertion sharp: since
+every value fails on first sight, the shrink accepts the origin immediately, so the counterexample is a
+known `0`, and `evals[0] === 2` (one accept + one re-check) proves the re-check ran *exactly once, on the
+reported value only* — the D026 "exactly once" clause, asserted rather than assumed.
