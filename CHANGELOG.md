@@ -8,6 +8,14 @@ All notable changes to this project are documented here. Format follows
 
 ### Added
 
+- SPEC-009 (edge-biased generation) — approved (maurice, 2026-08-03). An opt-in
+  `edgeBias` on `integers()` (D029, default off — keeps every existing seed
+  reproducible) that draws boundary values (`origin`, `min`, `max`, neighbours) at a
+  measured frequency, so property testing hits the edges where bugs — especially in
+  AI-generated code — cluster. Shrinking is unchanged (value-based); the bias
+  propagates through the combinators via delegation. R11 pre-approval check verified
+  the edge bias discriminates (uniform misses an edge-only bug that biased finds).
+  Not yet implemented.
 - SPEC-008 (stateless property runner) — **implemented** (maurice, 2026-08-03). The
   first v0.2 spec (D013): `StatelessProperty`, a `forAll`-style entry point over one
   `Generator<T>` and a predicate, drawing values from a seed, shrinking a failure to a

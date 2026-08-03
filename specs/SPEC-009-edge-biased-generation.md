@@ -2,9 +2,9 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | draft                                             |
+| Status     | approved                                          |
 | Author     | maurice                                           |
-| Approved   | — (while draft)                                   |
+| Approved   | maurice, 2026-08-03                               |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -174,15 +174,28 @@ The edge-set is internal to `IntegersGenerator`, derived from `[$min, $max]` and
 - **OQ4 (non-blocker) — user-supplied custom edges?** Deferred (§4) until a suite needs
   a domain boundary the range cannot derive. Recorded so it is a conscious omission.
 
-## Pre-approval checks (R10 / R11), to complete at approval
+## Pre-approval checks (R10 / R11)
 
 - **R10** — no subject: this spec introduces no new `@template` type (it changes a draw
   distribution, not a contract's generics). Positively dismissed.
-- **R11** — check each AC on both counts at approval. AC5's planted edge-bug must be
-  shown *constructible and discriminating*: that the biased generator finds it and the
-  uniform one does not within the same fixed budget/seed — verified against the built
-  generator before approval (the Step 58 lesson), since a poorly chosen range/budget
-  could make uniform generation find it too, collapsing the criterion.
+- **R11** — checked per AC on both counts (a path exists; the trigger is reachable):
+  - AC1/AC2: the biased draw and the bias decision both come from the seeded `Source`, so
+    the sequence is deterministic and reproducible (same mechanism proven in SPEC-008 AC3).
+  - AC3: `IntegersGenerator::shrink` is value-based (SPEC-008 AC2, proven), so an
+    edge-drawn value reduces toward the origin like any other — the path exists.
+  - AC4: `map`/`associative` delegate `generate()` to their inner generator, so biasing the
+    inner `integers` propagates with no change — the path exists.
+  - AC6: the `edgeBias` out-of-range guard is the SPEC-005/008 construction-guard pattern —
+    reachable trigger, existing path.
+  - **AC5 was verified constructible *and discriminating* against the real `Source`**, not
+    reasoned by analogy (the Step 58 lesson): a throwaway simulating the opt-in bias
+    (frequency 15%, edge-set `[0, 1000000, 1, 999999]`) over `integers(0, 1_000_000)` with
+    the bug "fails iff `n === max`". Across seeds `1, 42, 777, 12345, 2024`, **uniform
+    generation found the edge bug in none within 100 runs; biased generation found it in all
+    (at runs 8, 34, 29, 31, 22)**. The criterion genuinely discriminates — uniform misses
+    the edge, biased hits it — at the same seed and budget. Throwaway run and deleted, not
+    committed. The 15% here is only for the R11 demonstration, not the chosen default (OQ2 is
+    measured at build).
 
 ## Traceability
 
