@@ -2,7 +2,7 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | approved                                          |
+| Status     | implemented                                       |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-08-03                               |
 | Supersedes | —                                                 |
@@ -202,11 +202,15 @@ The edge-set is internal to `IntegersGenerator`, derived from `[$min, $max]` and
 Filled when status becomes `implemented`. Every acceptance criterion maps to at least
 one test; every source file maps back to this spec.
 
+Unit tests are in `tests/Unit/Generation/EdgeBiasTest.php` (group `SPEC-009`); the meta
+test is in `tests/Meta/EdgeOnlyBugShrinkTest.php`. Source is `IntegersGenerator` (the
+edge draw and guard) and `Gen::integers` (the `edgeBias` passthrough).
+
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
-| AC2                  | —                           | —                    |
-| AC3                  | —                           | —                    |
-| AC4                  | —                           | —                    |
-| AC5                  | —                           | —                    |
-| AC6                  | —                           | —                    |
+| AC1 | `EdgeBiasTest` :: "draws boundary values under edge bias, which uniform generation does not" | `IntegersGenerator::generate()` (edge branch), `::edgeSet()`; `Gen::integers($edgeBias)` |
+| AC2 | `EdgeBiasTest` :: "reproduces the identical biased sequence from the same seed, and varies with a different one" | `IntegersGenerator::generate()` (bias decision + edge index drawn from `Source`) |
+| AC3 | `EdgeBiasTest` :: "shrinks an edge-drawn counterexample toward the origin like any other value" | `IntegersGenerator::shrink()` (value-based, unchanged); `StatelessProperty::shrink()` |
+| AC4 | `EdgeBiasTest` :: "propagates edge bias through map and associative by delegation" | `MapGenerator`/`AssociativeGenerator` (delegate `generate()` to the inner, unchanged) |
+| AC5 | `EdgeOnlyBugShrinkTest` :: "edge bias finds an edge-only bug that uniform generation misses" (group `meta` + `SPEC-009`) | `IntegersGenerator` edge bias + `StatelessProperty`; frequency D030 (R8) |
+| AC6 | `EdgeBiasTest` :: "rejects an edgeBias outside 0..100 at construction" | `IntegersGenerator::__construct()` (guard) |

@@ -1907,3 +1907,29 @@ Follow-up flagged, not done: the README's limitations still say "No stateless pr
 main since SPEC-008) and frame the immutability bullet as stateful-only. Those two bullets should be
 updated together in a deliberate v0.2 README pass, not piecemeal — a piecemeal immutability edit would
 contradict the still-present "no stateless" bullet.
+
+## Step 68 — SPEC-009 finished: edge bias, and the highest-value AI-testing lever, measured (2026-08-03)
+
+Edge-biasing landed as an opt-in `edgeBias` percentage on `integers()`. The design paid off in how little
+it cost: it touches only `generate()` (a bias decision + edge index, both from the seeded `Source`), and
+**nothing else** — `shrink()` is value-based so it is oblivious to how a value was drawn (AC3), and
+`map`/`associative` inherit the bias by delegation (AC4). The two invariants that made this cheap, stated
+so a later change does not break them silently: the edge draw stores the *same* (null) context a uniform
+draw would, and the `edgeBias > 0` short-circuit means the off case draws **nothing** extra from the
+source — so every existing seed is byte-identical (D029), proven by the whole suite staying green.
+
+The measurement is the part worth keeping (the D007/Step 60 discipline, third application). Against a
+planted edge-only bug over `integers(0, 1_000_000)`, 100 runs, 40 seeds: uniform found it in **0/40**;
+`5%` in 36; `8%` in 37; **`10%` in 40/40**. So 10% is the smallest fully-reliable frequency, and it keeps
+90% of draws uniform. Recorded as D030 with the caveat that must not be lost: the reliable frequency is a
+function of range width, budget, and edge-set size — 10% is measured for *this* configuration (a
+million-wide range, 100 runs, the 2-edge set `{0, max}`), not a universal constant. A wider edge-set (OQ3
+neighbours) would dilute each edge's share and need more.
+
+The strategic framing this whole thread produced, recorded because it is easy to lose: **for testing
+AI-generated code, the leverage is where you sample and whether you have an independent oracle, not
+generator richness.** Edge-biasing (distribution) and the model/traceability discipline (oracle) catch the
+edge/boundary/degenerate bugs AI code and its co-written tests share a blind spot for; a richer `floats()`
+or `strings()` only matters once the argument is a float or free text, and then for its *edge-set*, not its
+uniform draw. Edge-biasing was the right first generation feature to build because it needs no new type —
+only smarter sampling of the types already owned.
