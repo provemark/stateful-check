@@ -31,7 +31,8 @@ use Provemark\StatefulCheck\{StatefulProperty, Setup};
 use Provemark\StatefulCheck\Generation\Gen;
 
 // Deposit and Withdraw are commands — four methods each: precondition, run,
-// nextState, postcondition. Elided here; the examples/ directory has full ones.
+// nextState, postcondition. Elided here; the tutorial builds this bank example
+// in full, and examples/ has other complete command suites.
 $deposit  = Gen::map(fn (int $n) => new Deposit($n),  Gen::integers(1, 100));
 $withdraw = Gen::map(fn (int $n) => new Withdraw($n), Gen::integers(1, 100));
 
