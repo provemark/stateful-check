@@ -33,6 +33,8 @@ final class StatelessProperty
         private readonly Generator $generator,
         private readonly Closure $predicate,
         private readonly int $runs = 100,
+        private readonly int $budget = 100,   // max shrink candidate executions (D007); its consumer is
+        // PropertyValueResult::$confirmedMinimum (AC5)
     ) {
         // A run count below 1 is a static configuration under which the property verifies nothing, and
         // a property that ran nothing must never look like one that passed (AC7). Guard at construction,
@@ -61,10 +63,16 @@ final class StatelessProperty
 
             if (($this->predicate)($generated->value) === false) {
                 // AC2: stop at the first failing value and shrink it toward the generator's origin to
-                // the minimal value that still fails (R2/R3), then report that as the counterexample.
-                $counterexample = $this->shrink($generated);
+                // the minimal value that still fails (R2/R3). AC5: if the shrink hits its budget first,
+                // the counterexample is the best found so far, flagged not a confirmed minimum.
+                [$counterexample, $confirmedMinimum] = $this->shrink($generated);
 
-                return new PropertyValueResult(passed: false, seed: $seed, counterexample: $counterexample->value);
+                return new PropertyValueResult(
+                    passed: false,
+                    seed: $seed,
+                    counterexample: $counterexample->value,
+                    confirmedMinimum: $confirmedMinimum,
+                );
             }
         }
 
@@ -81,17 +89,29 @@ final class StatelessProperty
      * carry the generator's opaque context, so a composite value (elements, map, associative) reduces
      * correctly, not only a bare integer.
      *
+     * AC5: each candidate the predicate is evaluated on counts against the budget (D007, a count of
+     * executions, not time — a time budget would break determinism). When the budget is reached the
+     * search stops and returns the best value found so far with `false` — not a confirmed minimum.
+     * A natural stop (no candidate still fails) returns `true`.
+     *
      * @param  GeneratedValue<T>  $failing
-     * @return GeneratedValue<T>
+     * @return array{GeneratedValue<T>, bool} the counterexample and whether it is a confirmed minimum
      */
-    private function shrink(GeneratedValue $failing): GeneratedValue
+    private function shrink(GeneratedValue $failing): array
     {
         $current = $failing;
+        $executions = 0;
 
         while (true) {
             $progressed = false;
 
             foreach ($this->generator->shrink($current) as $candidate) {
+                if ($executions >= $this->budget) {
+                    return [$current, false];
+                }
+
+                $executions++;
+
                 if (($this->predicate)($candidate->value) === false) {
                     $current = $candidate;
                     $progressed = true;
@@ -101,7 +121,7 @@ final class StatelessProperty
             }
 
             if (! $progressed) {
-                return $current;
+                return [$current, true];
             }
         }
     }

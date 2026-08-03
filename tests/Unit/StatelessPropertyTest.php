@@ -145,3 +145,23 @@ it('constructs without throwing when the configuration is valid (SPEC-008 AC7)',
 
     expect($property)->toBeInstanceOf(StatelessProperty::class);
 })->group('SPEC-008');
+
+it('reports a budget-limited shrink as not a confirmed minimum (SPEC-008 AC5)', function () {
+    $make = fn (int $budget): StatelessProperty => new StatelessProperty(
+        generator: Gen::integers(0, 1_000_000),
+        predicate: fn (int $n): bool => $n < 500_000,
+        runs: 100,
+        budget: $budget,
+    );
+
+    // The shrink to the minimum takes 93 candidate executions at this seed (measured). A budget of 100
+    // covers it and confirms the minimum; a budget of 1 stops after the first candidate.
+    $full = $make(100)->check(seed: 12345);
+    $limited = $make(1)->check(seed: 12345);
+
+    expect($full->confirmedMinimum)->toBeTrue()
+        ->and($full->counterexample)->toBe(500_000)
+        ->and($limited->passed)->toBeFalse()
+        ->and($limited->confirmedMinimum)->toBeFalse()
+        ->and($limited->counterexample)->toBeGreaterThan(500_000);   // R2: still fails, but not the minimum
+})->group('SPEC-008');

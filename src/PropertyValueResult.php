@@ -9,9 +9,14 @@ namespace Provemark\StatefulCheck;
  * not SPEC-005's PropertyResult reused: that carries a command list, a drawn initial state and a
  * runner Failure, none of which a single-value property has.
  *
- * At AC2 part 1 it carries the verdict, the seed, and on a failure the counterexample value — the
- * failing value as drawn, not yet shrunk (part 2 shrinks it). The not-a-confirmed-minimum flag (AC5)
- * and the non-determinism flag (AC6) arrive with their own ACs.
+ * It carries the verdict, the seed, on a failure the shrunk counterexample value, and
+ * `$confirmedMinimum` — whether that counterexample is a confirmed local minimum. The
+ * non-determinism flag (AC6) arrives with its own AC.
+ *
+ * `$confirmedMinimum` is `false` when the shrink stopped at its budget before reaching a local minimum
+ * (AC5): the counterexample is then the best value found so far, and the tool may not claim it minimal
+ * (R3). It is only meaningful when there is a counterexample; on a pass there is none, so it stays at
+ * its `true` default rather than describing a value that does not exist.
  *
  * @template T
  */
@@ -26,5 +31,6 @@ final readonly class PropertyValueResult
         public bool $passed,
         public int $seed,
         public mixed $counterexample = null,
+        public bool $confirmedMinimum = true,
     ) {}
 }

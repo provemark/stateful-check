@@ -1801,3 +1801,19 @@ even for *different* seeds. The real "the seed reaches the generator" catch is t
 counterexample test only pins that check() is a pure function of (config, seed). The stronger the shrinker,
 the weaker "same counterexample" is as a determinism signal — the two pull in opposite directions, and it
 is the draws, not the result, that must carry AC3.
+
+## Step 63 — SPEC-008 AC5: the budget rarely bites for single-value shrinks (2026-08-03)
+
+AC5 gives the stateless shrink the same count budget as the stateful one (D007: executions, not time —
+a time budget would make the counterexample machine-dependent). `confirmedMinimum` is the consumer:
+`false` when the budget stops the search before a local minimum, so the tool never claims a best-so-far
+value is minimal (R3). Followed the sketch on the *field* but used `budget` for the *parameter*, matching
+`StatefulProperty` rather than the sketch's `shrinkBudget` — cross-class symmetry over sketch fidelity,
+the same call made on the class rename.
+
+Measured, like Step 60: shrinking a failing draw over `integers(0, 1_000_000)` to the boundary took **93**
+candidate executions, so the default budget of 100 confirms it — the test uses budget 100 for the confirmed
+case and budget 1 for the limited one. The general point: a single-value integer shrink is a binary descent,
+~O(log² range) executions, so for realistic ranges it stays under 100 and the budget rarely bites — the
+opposite pressure from SPEC-006, where a structurally-long *sequence* minimum can exhaust it (Step 60's
+218-at-length-8). Same default, different headroom, because the stateless case shrinks one value, not a list.
