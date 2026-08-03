@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Provemark\StatefulCheck;
 
 use Closure;
+use InvalidArgumentException;
 use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Generation\Generator;
 use Provemark\StatefulCheck\Generation\Source;
@@ -32,7 +33,14 @@ final class StatelessProperty
         private readonly Generator $generator,
         private readonly Closure $predicate,
         private readonly int $runs = 100,
-    ) {}
+    ) {
+        // A run count below 1 is a static configuration under which the property verifies nothing, and
+        // a property that ran nothing must never look like one that passed (AC7). Guard at construction,
+        // so an invalid property never exists to be run (parallel to StatefulProperty AC6).
+        if ($runs < 1) {
+            throw new InvalidArgumentException(sprintf('StatelessProperty: runs must be at least 1, got %d.', $runs));
+        }
+    }
 
     /**
      * @return PropertyValueResult<T>

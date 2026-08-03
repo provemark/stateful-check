@@ -125,3 +125,23 @@ it('reproduces the same counterexample from the same seed — the wiring stays d
     expect($run())->toBe($run())
         ->and($run()[0])->toBeFalse();
 })->group('SPEC-008');
+
+it('throws at construction when the run count is below one (SPEC-008 AC7)', function () {
+    // A run count below 1 would verify nothing, and a property that ran nothing must never look like
+    // one that passed. Guard at construction, naming the offending value (parallel to SPEC-005 AC6).
+    expect(fn () => new StatelessProperty(
+        generator: Gen::integers(0, 10),
+        predicate: fn (int $n): bool => true,
+        runs: 0,
+    ))->toThrow(InvalidArgumentException::class, 'got 0');
+})->group('SPEC-008');
+
+it('constructs without throwing when the configuration is valid (SPEC-008 AC7)', function () {
+    $property = new StatelessProperty(
+        generator: Gen::integers(0, 10),
+        predicate: fn (int $n): bool => true,
+        runs: 1,
+    );
+
+    expect($property)->toBeInstanceOf(StatelessProperty::class);
+})->group('SPEC-008');
