@@ -66,3 +66,19 @@ it('reports a failing value as a counterexample that still fails, before any shr
         ->and($result->counterexample)->not->toBeNull()
         ->and($result->counterexample)->toBeGreaterThanOrEqual(500_000);
 })->group('SPEC-008');
+
+it('shrinks the failing value toward the origin to the minimal value that still fails (SPEC-008 AC2)', function () {
+    $property = new StatelessProperty(
+        generator: Gen::integers(0, 1_000_000),
+        predicate: fn (int $n): bool => $n < 500_000,
+        runs: 100,
+    );
+
+    $result = $property->check(seed: 12345);
+
+    // The raw failing draw at this seed is 666_698; the smallest value that still fails `n < 500_000`
+    // is exactly the boundary 500_000 (R2/R3, verified against the real generator). Shrinking must
+    // reduce the counterexample from the draw to that minimum.
+    expect($result->passed)->toBeFalse()
+        ->and($result->counterexample)->toBe(500_000);
+})->group('SPEC-008');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Provemark\StatefulCheck;
 
 use Closure;
+use Provemark\StatefulCheck\Generation\GeneratedValue;
 use Provemark\StatefulCheck\Generation\Generator;
 use Provemark\StatefulCheck\Generation\Source;
 
@@ -48,18 +49,53 @@ final class StatelessProperty
         $source = Source::seeded($seed);
 
         for ($run = 0; $run < $this->runs; $run++) {
-            $value = $this->generator->generate($source)->value;
+            $generated = $this->generator->generate($source);
 
-            if (($this->predicate)($value) === false) {
-                // AC2 part 1: stop at the first failing value and report it as the counterexample, as
-                // drawn. Part 2 will shrink it toward the origin to the minimal value that still fails
-                // before returning; here it is reported raw.
-                return new PropertyValueResult(passed: false, seed: $seed, counterexample: $value);
+            if (($this->predicate)($generated->value) === false) {
+                // AC2: stop at the first failing value and shrink it toward the generator's origin to
+                // the minimal value that still fails (R2/R3), then report that as the counterexample.
+                $counterexample = $this->shrink($generated);
+
+                return new PropertyValueResult(passed: false, seed: $seed, counterexample: $counterexample->value);
             }
         }
 
         // AC1: the predicate held for every drawn value, so the property passes.
         return new PropertyValueResult(passed: true, seed: $seed, counterexample: $this->noCounterexample());
+    }
+
+    /**
+     * Greedily reduce a failing value to a local minimum that still fails: repeatedly take the first
+     * shrink candidate whose value still fails the predicate and restart from it, until none does. It
+     * terminates because every generator shrink candidate is strictly closer to the origin, so the
+     * distance-to-origin measure falls on each accepted step (SPEC-003). R3: this is a *local* minimum
+     * — no single further reduction still fails — never claimed as a global one. The shrink candidates
+     * carry the generator's opaque context, so a composite value (elements, map, associative) reduces
+     * correctly, not only a bare integer.
+     *
+     * @param  GeneratedValue<T>  $failing
+     * @return GeneratedValue<T>
+     */
+    private function shrink(GeneratedValue $failing): GeneratedValue
+    {
+        $current = $failing;
+
+        while (true) {
+            $progressed = false;
+
+            foreach ($this->generator->shrink($current) as $candidate) {
+                if (($this->predicate)($candidate->value) === false) {
+                    $current = $candidate;
+                    $progressed = true;
+
+                    break;
+                }
+            }
+
+            if (! $progressed) {
+                return $current;
+            }
+        }
     }
 
     /**
