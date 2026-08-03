@@ -20,9 +20,9 @@ final class Gen
      *
      * @return Generator<int>
      */
-    public static function integers(int $min, int $max, ?int $origin = null): Generator
+    public static function integers(int $min, int $max, ?int $origin = null, int $edgeBias = 0): Generator
     {
-        return new IntegersGenerator($min, $max, $origin);
+        return new IntegersGenerator($min, $max, $origin, $edgeBias);
     }
 
     /**

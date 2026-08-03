@@ -24,6 +24,7 @@ final class IntegersGenerator implements Generator
         private readonly int $min,
         private readonly int $max,
         ?int $origin = null,
+        private readonly int $edgeBias = 0,   // percent 0..100; 0 = pure uniform (D029). AC6 guards the range.
     ) {
         // D016: the range width must fit in a PHP int. Checked WITHOUT subtracting,
         // which on the full range would overflow to a float and measure nothing.
@@ -51,7 +52,32 @@ final class IntegersGenerator implements Generator
      */
     public function generate(Source $source): GeneratedValue
     {
+        // Edge bias (SPEC-009 AC1): with `edgeBias` percent probability, draw a boundary value instead of
+        // a uniform one, where bugs cluster. The `> 0` short-circuit is load-bearing (D029): when the bias
+        // is off, no bias decision is drawn from the source, so the draw sequence — and every existing seed
+        // — is byte-for-byte unchanged. The decision and the edge index both come from the source, so the
+        // biased draw stays deterministic and reproducible (R4). The context is null exactly as a uniform
+        // draw's, so shrinking is oblivious to how the value was drawn.
+        if ($this->edgeBias > 0 && $source->nextInt(0, 99) < $this->edgeBias) {
+            $edges = $this->edgeSet();
+
+            return new GeneratedValue($edges[$source->nextInt(0, count($edges) - 1)]);
+        }
+
         return new GeneratedValue($source->nextInt($this->min, $this->max));
+    }
+
+    /**
+     * The boundary values to bias toward, derived from the range the generator already knows: the origin
+     * (where shrinking terminates) and the two bounds. Deduplicated and re-indexed to a list — for a range
+     * whose origin equals a bound (e.g. `integers(0, n)`), the set collapses accordingly. Neighbours
+     * (origin±1, min+1, max-1) are OQ3, added only if a planted neighbour-bug at AC5 needs them.
+     *
+     * @return list<int>
+     */
+    private function edgeSet(): array
+    {
+        return array_values(array_unique([$this->origin, $this->min, $this->max]));
     }
 
     /**
