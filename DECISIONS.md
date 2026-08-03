@@ -539,7 +539,8 @@ Then add `strings()` **with** its origin-ward `shrink()`, via a spec, with that 
 Spec: SPEC-008, OQ1
 Status: **decided**
 Decided: maurice, 2026-08-03
-Decision: `Property` takes one `Generator<T>` and one `callable(T): bool`. The
+Decision: `StatelessProperty` (renamed from the sketch's `Property`, 2026-08-03)
+takes one `Generator<T>` and one `callable(T): bool`. The
 multi-argument case (`forAll($a, $b, …)`) is expressed by composing a single
 `Gen::associative([...])` or `Gen::map(...)` — never a variadic API.
 Because: it is the minimum that expresses the dogfood stateless properties —
@@ -606,7 +607,7 @@ and the sibling helper folds into it.
 Spec: SPEC-008, OQ4
 Status: **decided**
 Decided: maurice, 2026-08-03
-Decision: `Property` is a constructed object with a `check(?int $seed)` method
+Decision: `StatelessProperty` is a constructed object with a `check(?int $seed)` method
 returning `PropertyValueResult`, matching SPEC-005's `StatefulProperty`. A fluent
 `forAll(...)->then(...)` facade is not built now.
 Because: consistency with the existing entry point is worth more than the mild
@@ -614,4 +615,4 @@ readability of a `forAll` facade, and the facade is pure sugar over the same obj
 — additive later without a breaking change if it earns its place (§4). Building both
 now would be speculative generality with no consumer asking for the second form.
 Revisit if: the examples or users find `check()` awkward enough that a `forAll`
-facade earns its place; it can be added over the same `Property` without a break.
+facade earns its place; it can be added over the same `StatelessProperty` without a break.

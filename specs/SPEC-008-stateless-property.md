@@ -5,6 +5,7 @@
 | Status     | approved                                          |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-08-03                               |
+| Amended    | maurice, 2026-08-03 — the entry point is named `StatelessProperty`, not the sketch's `Property`, for symmetry with `StatefulProperty` and to avoid a bare `Property` reading as ambiguous beside it. Renamed at AC1 (before any tag), so no breaking change. Sketch updated; behaviour unchanged. |
 | Supersedes | —                                                 |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -209,7 +210,7 @@ open question below.
 /**
  * @template T
  */
-final class Property
+final class StatelessProperty
 {
     /**
      * @param Generator<T>     $generator

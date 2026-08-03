@@ -20,7 +20,7 @@ use Provemark\StatefulCheck\Generation\Source;
  *
  * @template T
  */
-final class Property
+final class StatelessProperty
 {
     /**
      * @param  Generator<T>  $generator

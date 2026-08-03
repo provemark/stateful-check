@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 use Provemark\StatefulCheck\Generation\Gen;
-use Provemark\StatefulCheck\Property;
+use Provemark\StatefulCheck\StatelessProperty;
 
 it('runs n values from a seeded stream and reports success for a passing property (SPEC-008 AC1)', function () {
     $seen = 0;
-    $property = new Property(
+    $property = new StatelessProperty(
         generator: Gen::integers(0, 1_000_000),
         predicate: function (int $n) use (&$seen): bool {
             $seen++;
@@ -29,7 +29,7 @@ it('runs n values from a seeded stream and reports success for a passing propert
 
 it('advances one seeded stream across the runs, so the drawn values are not all identical (SPEC-008 AC1)', function () {
     $received = [];
-    $property = new Property(
+    $property = new StatelessProperty(
         generator: Gen::integers(0, 1_000_000),   // wide range, so a per-iteration re-seed would show up
         predicate: function (int $n) use (&$received): bool {
             $received[] = $n;
