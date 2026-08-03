@@ -47,3 +47,22 @@ it('advances one seeded stream across the runs, so the drawn values are not all 
     expect($received)->toHaveCount(5)
         ->and(count(array_unique($received)))->toBeGreaterThan(1);
 })->group('SPEC-008');
+
+it('reports a failing value as a counterexample that still fails, before any shrinking (SPEC-008 AC2)', function () {
+    $property = new StatelessProperty(
+        generator: Gen::integers(0, 1_000_000),
+        predicate: fn (int $n): bool => $n < 500_000,   // holds on the lower half, fails on the upper
+        runs: 100,
+    );
+
+    $result = $property->check(seed: 12345);
+
+    // The property does not hold, so the run fails and carries a counterexample. Part 1 does not shrink,
+    // so the value is only required to *still fail* the predicate (R2 — never return a passing
+    // counterexample); part 2 pins the exact minimum. `>= 500_000` is what "fails `n < 500_000`" means,
+    // and it stays true after part 2 shrinks to the boundary 500_000, so this assertion is not weakened
+    // later.
+    expect($result->passed)->toBeFalse()
+        ->and($result->counterexample)->not->toBeNull()
+        ->and($result->counterexample)->toBeGreaterThanOrEqual(500_000);
+})->group('SPEC-008');

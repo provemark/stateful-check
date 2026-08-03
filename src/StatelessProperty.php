@@ -14,9 +14,10 @@ use Provemark\StatefulCheck\Generation\Source;
  * analogue of StatefulProperty, and the `forAll` primitive the stateful runner is itself a special
  * case of (docs/prior-art.md).
  *
- * AC1 (this step) runs `runs` values from one seeded stream and reports success for a predicate that
- * holds throughout. Acting on a `false` verdict (stop, shrink), the non-determinism re-check (AC6),
- * the qualifications (AC5) and the construction guard (AC7) arrive with their own ACs.
+ * It runs `runs` values from one seeded stream, reports success for a predicate that holds throughout
+ * (AC1), and stops at the first value that fails, reporting it as the counterexample (AC2 part 1).
+ * Shrinking that value to a minimum (AC2 part 2), the non-determinism re-check (AC6), the
+ * qualifications (AC5) and the construction guard (AC7) arrive with their own ACs.
  *
  * @template T
  */
@@ -32,6 +33,9 @@ final class StatelessProperty
         private readonly int $runs = 100,
     ) {}
 
+    /**
+     * @return PropertyValueResult<T>
+     */
     public function check(?int $seed = null): PropertyValueResult
     {
         // A null seed means "pick one and tell me what it was", so a failure found by CI is
@@ -46,14 +50,27 @@ final class StatelessProperty
         for ($run = 0; $run < $this->runs; $run++) {
             $value = $this->generator->generate($source)->value;
 
-            // The predicate is invoked so one draw happens per run (AC1). Acting on a `false` verdict
-            // — stopping and shrinking to a counterexample — is AC2; the return is deliberately not
-            // read yet, so this omission is not a bug.
-            ($this->predicate)($value);
+            if (($this->predicate)($value) === false) {
+                // AC2 part 1: stop at the first failing value and report it as the counterexample, as
+                // drawn. Part 2 will shrink it toward the origin to the minimal value that still fails
+                // before returning; here it is reported raw.
+                return new PropertyValueResult(passed: false, seed: $seed, counterexample: $value);
+            }
         }
 
-        // AC1: a run that completes without acting on any verdict reports success. AC2 replaces this
-        // with the real pass/fail derived from the predicate.
-        return new PropertyValueResult(passed: true, seed: $seed);
+        // AC1: the predicate held for every drawn value, so the property passes.
+        return new PropertyValueResult(passed: true, seed: $seed, counterexample: $this->noCounterexample());
+    }
+
+    /**
+     * A typed null counterexample for the pass branch, where there is no failing value. Mirrors
+     * StatefulProperty::noInitial(): returning a bare `null` would bind the result's `T` to `null`
+     * instead of the property's value type, so the helper carries the generic intent.
+     *
+     * @return T|null
+     */
+    private function noCounterexample(): mixed
+    {
+        return null;
     }
 }

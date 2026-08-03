@@ -9,14 +9,22 @@ namespace Provemark\StatefulCheck;
  * not SPEC-005's PropertyResult reused: that carries a command list, a drawn initial state and a
  * runner Failure, none of which a single-value property has.
  *
- * At AC1 it carries only the verdict and the seed. The shrunk counterexample, the
- * not-a-confirmed-minimum flag (AC5) and the non-determinism flag (AC6) arrive with their own ACs,
- * at which point it becomes generic in the value type (`@template T`).
+ * At AC2 part 1 it carries the verdict, the seed, and on a failure the counterexample value — the
+ * failing value as drawn, not yet shrunk (part 2 shrinks it). The not-a-confirmed-minimum flag (AC5)
+ * and the non-determinism flag (AC6) arrive with their own ACs.
+ *
+ * @template T
  */
 final readonly class PropertyValueResult
 {
+    /**
+     * @param  T|null  $counterexample  the failing value on a failure; null on a pass. Typed `mixed` on
+     *                                  the property (mirroring PropertyResult) with the generic intent in
+     *                                  the docblock, so a null pass-result does not have to bind T.
+     */
     public function __construct(
         public bool $passed,
         public int $seed,
+        public mixed $counterexample = null,
     ) {}
 }
