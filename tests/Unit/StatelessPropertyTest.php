@@ -82,3 +82,46 @@ it('shrinks the failing value toward the origin to the minimal value that still 
     expect($result->passed)->toBeFalse()
         ->and($result->counterexample)->toBe(500_000);
 })->group('SPEC-008');
+
+it('reproduces the same draws from the same seed, and varies with a different one (SPEC-008 AC3)', function () {
+    $drawnWith = function (int $seed): array {
+        $received = [];
+        (new StatelessProperty(
+            generator: Gen::integers(0, 1_000_000),
+            predicate: function (int $n) use (&$received): bool {
+                $received[] = $n;
+
+                return true;   // holds, so all `runs` values are drawn
+            },
+            runs: 5,
+        ))->check(seed: $seed);
+
+        return $received;
+    };
+
+    // Same seed threads the same seeded stream through generation → identical draws. A different seed
+    // varies them, so the seed genuinely reaches the generator rather than being ignored. The second
+    // assertion is the mutation catch: a seed-ignoring but deterministic impl survives "same → same"
+    // but not "different → different" (mirrors SPEC-005 AC3).
+    expect($drawnWith(1))->toBe($drawnWith(1))
+        ->and($drawnWith(1))->not->toBe($drawnWith(2));
+})->group('SPEC-008');
+
+it('reproduces the same counterexample from the same seed — the wiring stays deterministic (SPEC-008 AC3)', function () {
+    $run = fn (): array => (function () {
+        $result = (new StatelessProperty(
+            generator: Gen::integers(0, 1_000_000),
+            predicate: fn (int $n): bool => $n < 500_000,
+            runs: 100,
+        ))->check(seed: 777);
+
+        return [$result->passed, $result->counterexample];
+    })();
+
+    // Two identical calls give an identical outcome — check() is a pure function of (config, seed),
+    // with no hidden non-determinism in the draw/shrink pipeline. Note the shrunk counterexample is
+    // seed-independent by design (it converges to the canonical minimum), so it is the *draws* test
+    // above that catches a seed being ignored; this pins run-to-run stability of the whole result.
+    expect($run())->toBe($run())
+        ->and($run()[0])->toBeFalse();
+})->group('SPEC-008');

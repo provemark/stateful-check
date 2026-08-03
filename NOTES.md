@@ -1743,3 +1743,61 @@ minimums, and the Revisit if now carries the measured boundary (218 at length 8,
 next reader need not re-measure. The decision leads with D007 — the budget is for expensive systems, where
 100 is already a lot, and raising it to comfort cheap in-memory long-minimum runs would penalise exactly
 the expensive systems the budget exists for.
+
+## Step 61 — v0.2 opened: v0.1.0 tagged, SPEC-008 approved, and a rename before the tag stuck (2026-08-03)
+
+v0.1 is functionally complete (all six specs `implemented`, both dogfood suites pass, README/tutorial
+honest, ROADMAP §6 closed), so the question was what comes next. Two honest tracks: ship v0.1, or start
+v0.2. Chose to do both in sequence — **tag v0.1.0 locally** (not published: no push, no Packagist), then
+open v0.2. The tag needed the CHANGELOG cut first (`[Unreleased]` → `[0.1.0]`, fresh `[Unreleased]` for
+v0.2), so a tag does not point at a commit whose changelog still says "unreleased". The namespace question
+CLAUDE.md flags as pre-tag was already settled (D008, keep `provemark`), so nothing blocked.
+
+**SPEC-008 (stateless property runner) is the first v0.2 spec**, named in D013 as the natural next step:
+the package owns generation, value shrinking and a seeded reproduction mechanism, but all three are
+reachable only through the stateful entry point. A user with an ordinary `forAll`-style property — one
+value, one predicate — has no entry point. The real dogfood file has such properties (commutativity,
+immutability) it cannot express, so §5 is only partly satisfied until this exists.
+
+Two process points worth keeping. **The pre-approval gates were run before approval, not after.** R10 was
+positively dismissed (T comes from one generator, no heterogeneous composition — the `Ref<T>`/`TInitial`
+reason). R11's AC8 planted-bug trigger was shown *constructible against the built generator*, not reasoned
+by analogy: a throwaway greedy shrink over the real `integers(0, 1000)` with predicate "fails iff n ≥ 50"
+settled on exactly 50 from every failing start — deleted, not committed. This is the Step 58 lesson made a
+habit: a trigger that looks constructible can refuse to plant, so check it against the real machinery.
+**Decisions D025–D028** recorded the four open questions (single generator; non-determinism by one
+re-check; a separate `PropertyValueResult`; constructor + `check()` over a `forAll` facade).
+
+**The rename Property → StatelessProperty happened at AC1, before any tag** — cheap now, a breaking change
+later. Reasoned: a bare `Property` beside `StatefulProperty` reads as ambiguous; symmetry wins. The
+approved sketch said `Property`, so the rename is recorded as a spec amendment (the sketch is illustrative,
+but coherence between spec and code is worth the one row).
+
+## Step 62 — SPEC-008 AC1–AC3: the stateless runner, and why a shrunk counterexample can't test the seed (2026-08-03)
+
+Built the runner one AC at a time, AC2 split in two on maurice's call (stop-and-report, then shrink) so the
+shrink lands as a pure addition.
+
+- **AC1** followed the Step 21 precedent exactly: invoke the predicate so a draw happens per run, but do
+  not act on the verdict yet (hardcode success, with a comment) — the pass/fail distinction is AC2. The
+  non-vacuous content is elsewhere: the predicate is called exactly `runs` times, and the drawn values are
+  not all identical (the cheapest catch for a per-iteration re-seed, which a call count cannot see).
+- **AC2 part 1** added the counterexample field and stopped at the first failing value, reported raw. The
+  result became generic (`@template T`), and the passing branch hit the same variance wall as SPEC-005: a
+  bare `null` counterexample binds the result's `T` to `null`, not the value type. Fixed by mirroring
+  `StatefulProperty::noInitial()` — a `noCounterexample(): mixed` helper carrying `@return T|null`.
+- **AC2 part 2** shrinks the failing value greedily (first candidate that still fails, restart) to a local
+  minimum, over the whole `GeneratedValue` so the opaque context travels and composite values reduce, not
+  just integers. Terminates on the strictly-falling distance-to-origin measure; no budget yet (that is AC5).
+  Expected minimum verified against the real generator first (500_000), so the test asserts a true value,
+  not a guess.
+- **AC3 is green-on-arrival** (intended-but-unspecified, Step 23/25): the seed mechanism was built at AC1.
+  Non-vacuity shown by mutation — ignoring the seed reddens the "different seed → different draws" assertion.
+
+The finding worth keeping from AC3: **a shrunk counterexample cannot be the determinism catch, because it
+is seed-independent by design.** "Same seed → same counterexample" reads like the natural reproduction
+test, but shrinking converges every failing draw to the same canonical minimum, so that assertion passes
+even for *different* seeds. The real "the seed reaches the generator" catch is the *draws* test; the
+counterexample test only pins that check() is a pure function of (config, seed). The stronger the shrinker,
+the weaker "same counterexample" is as a determinism signal — the two pull in opposite directions, and it
+is the draws, not the result, that must carry AC3.
