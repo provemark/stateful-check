@@ -1875,3 +1875,35 @@ the honest loop the spec opened: SPEC-008's §5 motivation ("the dogfood file ha
 package cannot express") is now not just *proven expressible* by AC1–AC8 but *demonstrated* in `examples/`,
 against the real engine, unmodified. The immutability property remains a README limitation for the stateful
 API but is now expressible statelessly too — left for when a consumer needs it, not built speculatively (§4).
+
+## Step 67 — immutability is not ported: it cannot be dogfooded honestly (2026-08-03)
+
+Asked whether to port the immutability law as a second stateless example. Decided **not to** — and the
+reason is worth recording because it is a real property of the law, not a gap in the runner.
+
+Immutability ("applying an operation to a derivation leaves the original untouched") **is** expressible
+with `StatelessProperty`. But the existing example SUT (`ImmutableBuilder`) is `final readonly` over
+value-typed fields (an enum, arrays — copy-on-write in PHP), so an aliasing/in-place-mutation bug is not
+even *writable* in it: `readonly` forbids the mutation at the language level. So a straight port would be
+a test that **cannot fail** — decorative, the exact thing §2 forbids, and unmutatable-provable (no bug to
+plant).
+
+Giving it teeth would need a *deliberately mutable* stand-in (a builder holding a mutable reference-type
+holder that a `with*` could alias). Rejected: (1) it is invented, not ported from a real dogfood suite —
+unlike commutativity, which came verbatim from `content-credentials` with the real builder as SUT; (2) it
+is a tautology — the test proves it catches the bug you planted in a SUT built to have it; (3) it is one
+narrow case, not a generic demonstration (the "is this generic enough?" that settled it).
+
+The deeper point: **immutability resists honest dogfooding.** The bug lives only in code that is *not*
+carefully immutable; a well-designed value is `readonly` precisely to make the law un-violable — so a
+realistic SUT cannot fail it and a failing SUT is contrived. There is no SUT that is both realistic and
+falsifiable. Commutativity has no such tension: a correct builder can still break it by accident
+(order-dependent output), so that law has real teeth and earned its example. Recorded as the honest line
+(option 2): the stateless runner *can* express immutability, but our realistic stand-ins are `readonly`
+and cannot violate it, so there is no non-decorative dogfood example — which is itself a small argument
+that `readonly` is the right design.
+
+Follow-up flagged, not done: the README's limitations still say "No stateless property testing" (stale on
+main since SPEC-008) and frame the immutability bullet as stateful-only. Those two bullets should be
+updated together in a deliberate v0.2 README pass, not piecemeal — a piecemeal immutability edit would
+contradict the still-present "no stateless" bullet.
