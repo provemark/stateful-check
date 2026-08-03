@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-03
+
 ### Added
 
 - SPEC-009 (edge-biased generation) — **implemented** (maurice, 2026-08-03). An opt-in
@@ -29,7 +31,6 @@ All notable changes to this project are documented here. Format follows
   counterexample once), D027 (a separate `PropertyValueResult<T>`, not `PropertyResult`
   reused), D028 (constructor + `check()`, named `StatelessProperty`, no `forAll` facade
   yet). `docs/prior-art.md` gains a "stateless primitive underneath — `forAll`" section.
-- `v0.1.0` tagged locally (not published).
 
 ## [0.1.0] - 2026-08-03
 
