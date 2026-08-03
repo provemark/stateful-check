@@ -1,12 +1,14 @@
 # stateful-check
 
-Model-based (stateful) property testing for PHP. Generate sequences of
-commands, run them against a system and a shadow model in lockstep, and shrink
-a failure to a minimal counterexample.
+Model-based (stateful) property testing for PHP: generate sequences of commands,
+run them against a system and a shadow model in lockstep, and shrink a failure to
+a minimal counterexample. It also provides a stateless `forAll` for ordinary
+input-based properties, over the same seeded, shrinking generation core.
 
-> **Status: pre-release.** The v0.1 engine is implemented and dogfooded against
-> two ported real-world suites, but it has not been tagged and the API may still
-> change before 1.0.
+> **Status: pre-release.** The v0.1 engine is implemented and dogfooded, and is
+> tagged `v0.1.0` locally (not yet published). Since then a stateless `forAll`
+> runner and opt-in edge-biased generation have been added on `main`. The API may
+> still change before 1.0.
 
 ## Why
 
@@ -48,6 +50,28 @@ checked across a *space* of starting points rather than one fixed setup.
 A step-by-step walkthrough — every concept, building a real test, and reading a
 shrunk counterexample — is in [docs/tutorial.md](docs/tutorial.md).
 
+### Stateless properties
+
+For an ordinary property over a single generated value, `StatelessProperty` is a
+`forAll` over the same generation core — seeded, and shrinking a failure to a
+minimal value:
+
+```php
+use Provemark\StatefulCheck\StatelessProperty;
+use Provemark\StatefulCheck\Generation\Gen;
+
+$result = (new StatelessProperty(
+    generator: Gen::integers(0, 1_000_000, edgeBias: 10),   // opt-in: also draw the boundaries
+    predicate: fn (int $n): bool => (int) (string) $n === $n,
+))->check();
+```
+
+`edgeBias` is opt-in and off by default, so every recorded seed stays reproducible.
+When set, that percentage of draws are the range's boundary values — `0`, the
+minimum, the maximum — where off-by-one and degenerate-case bugs cluster and uniform
+sampling almost never lands. It composes through `map` and `associative`, so a
+command argument built on a biased integer inherits it.
+
 ## What it does not do
 
 - **No parallel execution and no automatic race detection.** PHP is
@@ -66,21 +90,23 @@ shrunk counterexample — is in [docs/tutorial.md](docs/tutorial.md).
   known coverage gap, called out because it can read as a surprising counterexample
   rather than a limitation.
 - **No general-purpose generator library.** Generation is owned — seeded on PHP
-  8.2's Random extension — but only the combinators this needs exist. It is not a
-  replacement for a full property-testing toolkit.
-- **No stateless property testing.** This is the *stateful* layer: it generates
-  and shrinks command sequences. It has no `forAll` for input-based properties. If
-  you also write those, pair it with a stateless property tester — [Eris](https://github.com/giorgiosironi/eris)
-  is the natural companion in PHP.
+  8.2's Random extension — but only the combinators command arguments need exist
+  (`integers`, `elements`, `map`, `associative`, `constant`); there is no general
+  string or float generator. The stateless `forAll` is a base primitive, not a
+  replacement for a full property-testing toolkit — for rich stateless value
+  generation, [Eris](https://github.com/giorgiosironi/eris) is the natural companion
+  in PHP.
 - **No help with non-deterministic systems.** Shrinking requires a stable
   verdict. A flapping system aborts shrinking with a message rather than
   reporting a misleading counterexample.
-- **No check that a system's own values are immutable.** The runner threads one
-  system handle through the sequence (a `Ref` for immutable systems), which erases
-  the distinction between an immutable value passed forward and a mutable object
-  mutated in place. A property such as "an earlier builder instance is untouched by
-  later commands" cannot be expressed here — it is a property of the system, not of
-  the command sequence, and belongs in an ordinary test.
+- **Immutability is not something the tool tests for you.** The *stateful* runner
+  threads one system handle through the sequence (a `Ref` for immutable systems),
+  which erases the distinction between an immutable value passed forward and a
+  mutable object mutated in place — so "an earlier instance is untouched by later
+  commands" cannot be expressed there. The stateless `forAll` *can* express it, but a
+  well-designed immutable value is `readonly` and therefore cannot violate the law, so
+  there is rarely a meaningful failing case to write. In practice this belongs in an
+  ordinary test.
 
 ## Dependencies
 
@@ -103,7 +129,7 @@ spec's traceability table.
 ```bash
 composer check    # pint + phpstan (max) + pest
 composer meta     # shrinker correctness against planted bugs
-composer examples # the two ported real-world dogfood suites
+composer examples # the ported real-world dogfood suites
 ```
 
 ## Licence
