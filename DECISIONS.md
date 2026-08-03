@@ -616,3 +616,30 @@ readability of a `forAll` facade, and the facade is pure sugar over the same obj
 now would be speculative generality with no consumer asking for the second form.
 Revisit if: the examples or users find `check()` awkward enough that a `forAll`
 facade earns its place; it can be added over the same `StatelessProperty` without a break.
+
+## D029 — Edge-biasing is opt-in (a parameter, default off), not on by default
+
+Spec: SPEC-009, OQ1
+Status: **decided**
+Decided: maurice, 2026-08-03
+Decision: edge-biasing is an **opt-in parameter** on `integers()` (e.g. `edgeBias`,
+default `0` = today's pure uniform), not built on by default and not a separate
+wrapper. It composes because the leaf carries it — `map`/`associative` inherit the
+bias with no change.
+Because: reproducibility (R4) is a core promise and the whole suite pins seeds.
+On-by-default would change the draw sequence of *every* existing seed — breaking every
+seed-pinned test and invalidating any seed a user has recorded — which is exactly the
+machine-independent-reproducibility promise the package leads with. Opt-in keeps every
+existing seed reproducible and makes biasing a deliberate, composable choice. A wrapper
+was rejected because a generic `withEdges($gen)` needs the inner generator to expose its
+edges, which only `integers` has; a parameter on `integers` is the smaller, honest shape.
+The cross-link worth stating: this **runs against D006's logic**, which rejected an opt-in
+`Cloneable` *because opt-in fails silently*. The same silent-degradation risk exists here —
+a user who wants edge-bias but forgets the parameter gets uniform generation and silently
+misses edge bugs. D006 still chose always-on there because cloning always-on was *free*;
+edge-bias always-on is *not* free (it costs reproducibility of every seed), so the trade
+genuinely differs and opt-in wins here. But the silent-degradation risk is real and is the
+revisit condition, not an oversight.
+Revisit if: the AI-testing consumer finds opt-in too easy to forget in practice (the D006
+failure mode) — then reconsider default-on for a future major once recorded seeds are
+understood as bias-inclusive, or a project-level default that a suite sets once.
