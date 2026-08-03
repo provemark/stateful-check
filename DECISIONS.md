@@ -643,3 +643,26 @@ revisit condition, not an oversight.
 Revisit if: the AI-testing consumer finds opt-in too easy to forget in practice (the D006
 failure mode) — then reconsider default-on for a future major once recorded seeds are
 understood as bias-inclusive, or a project-level default that a suite sets once.
+
+## D030 — The measured recommended edge-bias frequency is 10%
+
+Spec: SPEC-009, OQ2
+Status: **decided (measured)**
+Decided: maurice, 2026-08-03
+Decision: the recommended edge-bias frequency is **10%** (`edgeBias: 10`). It is a
+*recommended* value — documented and used by the AC5 meta-test — **not a code default**:
+D029 keeps the parameter opt-in with default `0` (off), so 10% is what a user should
+reach for when turning bias on, not what the library imposes.
+Because: measured, not guessed (the D007/Step 60 discipline). Against a planted edge-only
+bug (a property that fails only at `max`) over `integers(0, 1_000_000)` with a 100-run
+budget, across 40 seeds: uniform (`0%`) found it in **0/40**, `5%` in 36/40, `8%` in 37/40,
+and **`10%` in 40/40** — 10% is the smallest fully-reliable frequency in the sample, and it
+keeps 90% of draws uniform so ordinary (non-edge) coverage is retained. The 90/10
+uniform/edge split is also the conventional balance in QuickCheck descendants.
+Caveat (stated, not hidden): the reliable frequency is a function of **range width, run
+budget, and edge-set size**, not a universal constant. 10% is measured for this
+configuration (a million-wide range, 100 runs, the 2-element edge-set `{0, max}`). A wider
+edge-set (OQ3 neighbours) dilutes each edge's share and would need a higher frequency for
+the same reliability; a much wider range or smaller budget shifts it too.
+Revisit if: OQ3 adds neighbours to the edge-set (re-measure — each edge's share drops), or a
+real suite's range/budget differs enough that 10% under- or over-shoots.
