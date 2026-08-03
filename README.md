@@ -5,13 +5,14 @@
 
 Model-based (stateful) property testing for PHP: generate sequences of commands,
 run them against a system and a shadow model in lockstep, and shrink a failure to
-a minimal counterexample. It also provides a stateless `forAll` for ordinary
-input-based properties, over the same seeded, shrinking generation core.
+a minimal counterexample. It also provides a stateless property runner
+(`StatelessProperty`) — a forAll-style check for ordinary input-based properties —
+over the same seeded, shrinking generation core.
 
 > **Status: pre-release.** The v0.1 engine is implemented and dogfooded, and is
-> tagged `v0.1.0` locally (not yet published). Since then a stateless `forAll`
-> runner and opt-in edge-biased generation have been added on `main`. The API may
-> still change before 1.0.
+> tagged `v0.1.0` locally (not yet published). Since then a stateless property
+> runner (`StatelessProperty`) and opt-in edge-biased generation have been added on
+> `main`. The API may still change before 1.0.
 
 ## Why
 
@@ -55,9 +56,10 @@ shrunk counterexample — is in [docs/tutorial.md](docs/tutorial.md).
 
 ### Stateless properties
 
-For an ordinary property over a single generated value, `StatelessProperty` is a
-`forAll` over the same generation core — seeded, and shrinking a failure to a
-minimal value:
+For an ordinary property over a single generated value, `StatelessProperty` runs a
+predicate over the same generation core — a forAll-style check, seeded, shrinking a
+failure to a minimal value. You construct it and call `check()`; there is no `forAll`
+function (that facade is deferred):
 
 ```php
 use Provemark\StatefulCheck\StatelessProperty;
