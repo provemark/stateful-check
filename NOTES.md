@@ -1857,3 +1857,21 @@ yet include, recorded so it is not mistaken for done: no `examples/` port of a r
 property (commutativity/immutability from the content-credentials suite) — the spec's §5 motivation is
 proven expressible by AC1–AC8 but not yet *demonstrated* in `examples/`. A natural next step, its own small
 piece, not part of these ACs.
+
+## Step 66 — the stateless dogfood example, closing the §5 gap it was built for (2026-08-03)
+
+Ported the immutable builder's **commutativity law** into `examples/` as example 3
+(`BuilderCommutativityExampleTest`): two independent setters commute — software-agent-then-claim
+builds the identical manifest as the reverse. This is exactly the property example 1's own comment
+named as *inexpressible* by the stateful entry point ("a stateful entry point cannot express a pairwise
+commutativity law", D013). It reuses the same self-contained builder SUT (D014); the whole property is
+one `Gen::associative` record fed to `StatelessProperty` — no command sequence, no model.
+
+Two things kept to the session's standard. It reuses the existing SUT rather than adding a second one —
+the stateless gap was in the *runner*, not the system, so a new SUT would be noise. And its non-vacuity
+was shown by mutation despite being a pass-by-design dogfood example: reversing one manifest's key order
+made `===` fail with a real counterexample (`seed=603145`), so the equality genuinely bites. That closes
+the honest loop the spec opened: SPEC-008's §5 motivation ("the dogfood file has stateless properties this
+package cannot express") is now not just *proven expressible* by AC1–AC8 but *demonstrated* in `examples/`,
+against the real engine, unmodified. The immutability property remains a README limitation for the stateful
+API but is now expressible statelessly too — left for when a consumer needs it, not built speculatively (§4).
