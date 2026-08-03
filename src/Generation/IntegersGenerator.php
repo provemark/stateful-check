@@ -45,6 +45,13 @@ final class IntegersGenerator implements Generator
         } else {
             $this->origin = $origin;
         }
+
+        // AC6: edgeBias is a percentage; a value outside [0, 100] is a caller error (0 = off, D029).
+        if ($edgeBias < 0 || $edgeBias > 100) {
+            throw new InvalidArgumentException(
+                "integers(): edgeBias ($edgeBias) must be a percentage in [0, 100].",
+            );
+        }
     }
 
     /**

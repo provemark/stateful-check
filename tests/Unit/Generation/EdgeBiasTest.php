@@ -98,3 +98,15 @@ it('propagates edge bias through map and associative by delegation (SPEC-009 AC4
         ->and($mapEdges($mappedUniform))->toBe(0)
         ->and($recordEdges)->toBeGreaterThan(0);
 })->group('SPEC-009');
+
+it('rejects an edgeBias outside 0..100 at construction (SPEC-009 AC6)', function () {
+    // A percentage above 100 or below 0 is a caller error; guard at construction, naming the value.
+    expect(fn () => Gen::integers(0, 10, edgeBias: 101))
+        ->toThrow(InvalidArgumentException::class, '101');
+    expect(fn () => Gen::integers(0, 10, edgeBias: -1))
+        ->toThrow(InvalidArgumentException::class, '-1');
+
+    // The boundaries are valid: 0 is off (the default), 100 is always-edge.
+    expect(fn () => Gen::integers(0, 10, edgeBias: 0))->not->toThrow(InvalidArgumentException::class);
+    expect(fn () => Gen::integers(0, 10, edgeBias: 100))->not->toThrow(InvalidArgumentException::class);
+})->group('SPEC-009');
