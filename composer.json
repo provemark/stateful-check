@@ -12,6 +12,18 @@
     ],
     "type": "library",
     "license": "MIT",
+    "homepage": "https://github.com/provemark/stateful-check",
+    "authors": [
+        {
+            "name": "Maurice van Loon",
+            "email": "mauricevanloon1969@gmail.com",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/provemark/stateful-check/issues",
+        "source": "https://github.com/provemark/stateful-check"
+    },
     "require": {
         "php": "^8.2"
     },

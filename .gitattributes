@@ -1,0 +1,17 @@
+# Keep the Composer dist lean: ship only what a consumer needs (src/, testing/,
+# composer.json, LICENSE, README, CHANGELOG). Everything below is excluded from the
+# `composer require` archive; it stays in the Git repo.
+/.github            export-ignore
+/docs               export-ignore
+/examples           export-ignore
+/specs              export-ignore
+/tests              export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/CLAUDE.md          export-ignore
+/DECISIONS.md       export-ignore
+/NOTES.md           export-ignore
+/ROADMAP.md         export-ignore
+/phpstan.neon       export-ignore
+/phpunit.xml        export-ignore
+/pint.json          export-ignore

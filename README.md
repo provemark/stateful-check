@@ -1,5 +1,8 @@
 # stateful-check
 
+[![CI](https://github.com/provemark/stateful-check/actions/workflows/ci.yml/badge.svg)](https://github.com/provemark/stateful-check/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Model-based (stateful) property testing for PHP: generate sequences of commands,
 run them against a system and a shadow model in lockstep, and shrink a failure to
 a minimal counterexample. It also provides a stateless `forAll` for ordinary
