@@ -66,3 +66,35 @@ it('shrinks an edge-drawn counterexample toward the origin like any other value 
     expect($result->passed)->toBeFalse()
         ->and($result->counterexample)->toBe(500_000);
 })->group('SPEC-009');
+
+it('propagates edge bias through map and associative by delegation (SPEC-009 AC4)', function () {
+    $draw = function (Generator $g): array {
+        $source = Source::seeded(42);
+        $out = [];
+        for ($i = 0; $i < 100; $i++) {
+            $out[] = $g->generate($source)->value;
+        }
+
+        return $out;
+    };
+
+    // map over a biased integer: the inner edges (0, 1_000_000) survive the +1 transform as (1, 1_000_001);
+    // over a uniform integer they do not. So the bias reaches through map, with no change to map itself.
+    $inc = fn (int $n): int => $n + 1;
+    $mappedBiased = $draw(Gen::map($inc, Gen::integers(0, 1_000_000, edgeBias: 20)));
+    $mappedUniform = $draw(Gen::map($inc, Gen::integers(0, 1_000_000)));
+    $mapEdges = fn (array $xs): int => count(array_filter($xs, fn ($v): bool => in_array($v, [1, 1_000_001], true)));
+
+    // associative over a biased integer: the record's key carries the inner edge values.
+    $records = $draw(Gen::associative(['n' => Gen::integers(0, 1_000_000, edgeBias: 20)]));
+    $recordEdges = 0;
+    foreach ($records as $r) {
+        if (is_array($r) && in_array($r['n'] ?? null, [0, 1_000_000], true)) {
+            $recordEdges++;
+        }
+    }
+
+    expect($mapEdges($mappedBiased))->toBeGreaterThan(0)
+        ->and($mapEdges($mappedUniform))->toBe(0)
+        ->and($recordEdges)->toBeGreaterThan(0);
+})->group('SPEC-009');
