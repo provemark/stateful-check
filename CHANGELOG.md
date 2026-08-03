@@ -6,6 +6,18 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- SPEC-008 (stateless property runner) — approved (maurice, 2026-08-03). The first
+  v0.2 spec (D013): a `forAll`-style entry point over one `Generator<T>` and a
+  predicate, drawing values from a seed, shrinking a failure to a minimal
+  counterexample, and reporting it — the value-level analogue of SPEC-005. Decisions
+  D025 (single generator; multi-argument via `associative`/`map`), D026 (non-determinism
+  detected by re-checking the reported counterexample once), D027 (a separate
+  `PropertyValueResult<T>`, not `PropertyResult` reused), D028 (constructor + `check()`,
+  no `forAll` facade yet). `docs/prior-art.md` gains a "stateless primitive underneath
+  — `forAll`" section.
+
 ## [0.1.0] - 2026-08-03
 
 ### Added

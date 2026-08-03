@@ -24,6 +24,33 @@ shrinker, and turned out to be unnecessary — see the fast-check section below 
 R1. Our runner has a single phase; commands whose precondition fails are simply
 skipped (SPEC-001 AC3).
 
+## The stateless primitive underneath — `forAll`
+
+The command-sequence machinery above is not the base layer; it sits on an older,
+simpler one. Every property tool since QuickCheck (Haskell, Claessen & Hughes,
+2000) is built on `forAll(generator, predicate)`: draw a value, check a predicate,
+and on failure shrink the value toward a minimum. The stateful property is a
+*special case* of it — the generator produces a sequence of commands and the
+predicate runs them against the model. fast-check makes this literal:
+`fc.commands(...)` is just an `Arbitrary`, and a stateful run is
+`fc.assert(fc.property(fc.commands(...), setup => fc.modelRun(setup, cmds)))` — a
+`forAll` over a commands arbitrary. Eris exposes `forAll(...)->then(...)`;
+Hypothesis has `@given(...)` beside its `RuleBasedStateMachine`.
+
+We started at the stateful layer and never exposed the primitive beneath it, so a
+user with an ordinary property has no entry point (SPEC-008 fixes this). The
+mechanism is not new: the value shrink is the generator's own origin-ward `shrink()`
+(SPEC-003/006) — no executed-subset filtering (R1), no model, just reduce the value.
+Shrinking stays *external* to the generator here too, the same deliberate divergence
+from fast-check's integrated model recorded for sequences (D003).
+
+One place we go slightly beyond the mature tools: they reproduce a counterexample
+from a seed and otherwise **trust the predicate to be pure** — a non-deterministic
+predicate is treated as user error, not detected. SPEC-008 adds a single re-check of
+the reported counterexample (D026) as R4's stateless analogue, since the stateless
+runner has no replay-path detector (SPEC-002 AC8) to lean on. A modest strengthening,
+not something QuickCheck, fast-check or Eris do.
+
 ## fast-check (TypeScript) — the blueprint
 
 `fc.commands` / `fc.modelRun`. Actively maintained, and it genuinely shrinks

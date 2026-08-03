@@ -533,3 +533,85 @@ records a deliberate non-addition, not a removal, which is why it lives here and
 Revisit if: a concrete case appears with a **free text field as a command argument** — a parser command, a
 name/input field, or the separate AI-generated-code verification package that will build on this engine.
 Then add `strings()` **with** its origin-ward `shrink()`, via a spec, with that case as the named consumer.
+
+## D025 — The stateless runner takes a single generator, not a variadic forAll
+
+Spec: SPEC-008, OQ1
+Status: **decided**
+Decided: maurice, 2026-08-03
+Decision: `Property` takes one `Generator<T>` and one `callable(T): bool`. The
+multi-argument case (`forAll($a, $b, …)`) is expressed by composing a single
+`Gen::associative([...])` or `Gen::map(...)` — never a variadic API.
+Because: it is the minimum that expresses the dogfood stateless properties —
+commutativity needs name *and* version, which `Gen::associative(['name' => …,
+'version' => …])` carries as one value — and it mirrors exactly how the stateful
+side already builds a multi-argument command (SPEC-003, Steps 8–9). Crucially, no
+shrinking capability is lost: `associative` shrinks component-by-component (Step
+17), which is the same reduction a variadic `forAll` over independent generators
+would give, so the composed form is not a weaker substitute — it is equivalent
+where it matters. A variadic API is therefore speculative generality (§4), and it
+is additive later without a break if a real need appears.
+Revisit if: a suite needs per-argument shrinking that component-wise `associative`
+demonstrably cannot express (none is known, and the equivalence above suggests none
+will).
+
+## D026 — Stateless non-determinism is detected by re-checking the final counterexample once
+
+Spec: SPEC-008, OQ2
+Status: **decided**
+Decided: maurice, 2026-08-03
+Decision: after shrinking settles on a counterexample, the runner re-runs the
+predicate **once** on that value. If the verdict flips (the value now passes), the
+result reports a non-determinism qualification instead of a clean counterexample,
+and does not throw.
+Because: R4 (determinism, and detect its absence) is a core promise, but the
+stateful R4 detector — replay-path divergence (SPEC-002 AC8) — has no analogue
+here: the stateless runner has no execution path, only the predicate's verdict on a
+value. Verdict-stability on the one value that would be *reported* is the available
+signal, and a value whose verdict flips is precisely a counterexample that would not
+reproduce — worse to report clean than to qualify. The check is deliberately
+minimal: it does not re-check every draw or every shrink step (that would roughly
+double the run); it guards only the reported value, where instability misleads a
+user most. This is the qualification pattern SPEC-005 AC5 already uses, not a throw.
+Revisit if: non-deterministic predicates prove common enough that per-draw detection
+earns its cost, or a stronger guarantee (re-check each accepted shrink candidate) is
+wanted — both are strictly-more-expensive supersets of this one.
+
+## D027 — The stateless result is a separate PropertyValueResult, not a reused PropertyResult
+
+Spec: SPEC-008, OQ3 (delegated to the implementer; recorded as maurice's by delegation, 2026-08-03)
+Status: **decided**
+Decided: maurice (delegated), 2026-08-03
+Decision: a separate `final` `readonly` `PropertyValueResult<T>`; SPEC-005's
+`PropertyResult` is not overloaded to carry both. The knock-on — SPEC-007's
+`assertPropertyPassed()` is typed to `PropertyResult` — is resolved by a **sibling**
+assertion helper for the value result, **not** a shared `PropertyResultInterface`;
+that choice is settled at SPEC-008 implementation, not now.
+Because: `PropertyResult` carries a command list, a drawn initial state, and a
+runner `Failure` — none of which exist for a single-value property. Reusing it forces
+those three fields nullable and vestigial for the stateless case, which is exactly
+the trap SPEC-005's 2026-07-31 scope-trim amendment named: an unused field in a
+public result object cannot be removed without a breaking change. A separate object
+keeps every field always-meaningful. A shared interface to let one assertion helper
+serve both is an abstraction §4 forbids until two concrete result types exist to
+justify it — after this spec they will, so the interface (if ever wanted) becomes a
+later, evidence-backed move, not a speculative one now; the sibling helper is the
+smaller step that needs no new abstraction.
+Revisit if: a third result type appears, giving a shared `PropertyResultInterface`
+two-plus real implementers — then `assertPropertyPassed()` can accept the interface
+and the sibling helper folds into it.
+
+## D028 — The stateless entry point is constructor + check(), not a forAll facade
+
+Spec: SPEC-008, OQ4
+Status: **decided**
+Decided: maurice, 2026-08-03
+Decision: `Property` is a constructed object with a `check(?int $seed)` method
+returning `PropertyValueResult`, matching SPEC-005's `StatefulProperty`. A fluent
+`forAll(...)->then(...)` facade is not built now.
+Because: consistency with the existing entry point is worth more than the mild
+readability of a `forAll` facade, and the facade is pure sugar over the same object
+— additive later without a breaking change if it earns its place (§4). Building both
+now would be speculative generality with no consumer asking for the second form.
+Revisit if: the examples or users find `check()` awkward enough that a `forAll`
+facade earns its place; it can be added over the same `Property` without a break.
