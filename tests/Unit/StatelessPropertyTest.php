@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Provemark\StatefulCheck\Generation\Gen;
+use Provemark\StatefulCheck\PropertyValueResult;
 use Provemark\StatefulCheck\StatelessProperty;
 
 it('runs n values from a seeded stream and reports success for a passing property (SPEC-008 AC1)', function () {
@@ -190,4 +191,38 @@ it('re-checks the counterexample once and reports a non-deterministic verdict fl
         ->and($result->confirmedMinimum)->toBeFalse()
         ->and($result->counterexample)->toBe(0)
         ->and($evals[0])->toBe(2);
+})->group('SPEC-008');
+
+it('renders a failing result as the seed and the counterexample value (SPEC-008 AC4)', function () {
+    $result = new PropertyValueResult(passed: false, seed: 12345, counterexample: 500_000);
+
+    expect($result->counterexampleAsString())
+        ->toContain('seed=12345')
+        ->toContain('500000');
+})->group('SPEC-008');
+
+it('renders a passing result as the seed and a no-counterexample note (SPEC-008 AC4)', function () {
+    $result = new PropertyValueResult(passed: true, seed: 777);
+
+    expect($result->counterexampleAsString())
+        ->toContain('seed=777')
+        ->toContain('no counterexample');
+})->group('SPEC-008');
+
+it('marks a budget-limited counterexample as not a confirmed minimum (SPEC-008 AC4)', function () {
+    $result = new PropertyValueResult(passed: false, seed: 1, counterexample: 999, confirmedMinimum: false);
+
+    expect($result->counterexampleAsString())->toContain('not a confirmed minimum');
+})->group('SPEC-008');
+
+it('marks a non-deterministic counterexample as such (SPEC-008 AC4)', function () {
+    $result = new PropertyValueResult(passed: false, seed: 1, counterexample: 0, confirmedMinimum: false, nonDeterministic: true);
+
+    expect($result->counterexampleAsString())->toContain('non-deterministic');
+})->group('SPEC-008');
+
+it('renders any value without a fatal (SPEC-008 AC4)', function () {
+    $result = new PropertyValueResult(passed: false, seed: 1, counterexample: ['a' => 1, 'b' => 2]);
+
+    expect($result->counterexampleAsString())->toBeString();
 })->group('SPEC-008');

@@ -36,4 +36,36 @@ final readonly class PropertyValueResult
         public bool $confirmedMinimum = true,
         public bool $nonDeterministic = false,
     ) {}
+
+    /**
+     * The one reproduction artefact (AC4): the seed (so the run can be regenerated) and, on a failure,
+     * the counterexample value in readable form:
+     *
+     *     seed=12345 · counterexample=500000
+     *
+     * `var_export` renders the value because it is total over PHP values — a string cast fatals on
+     * enums and objects, `json_encode` breaks on a non-backed enum (the same choice PropertyResult
+     * makes). A non-confirmed counterexample carries a marker (R3): a budget-limited one reads "not a
+     * confirmed minimum", a non-deterministic one says its verdict flipped on re-check — without the
+     * marker an unconfirmed value reads as the minimum, the overclaim AC5/AC6 exist to prevent. A pass
+     * has no counterexample, so it renders why instead of an empty value.
+     */
+    public function counterexampleAsString(): string
+    {
+        $seed = sprintf('seed=%d', $this->seed);
+
+        if ($this->passed) {
+            return $seed.' · property held, no counterexample';
+        }
+
+        $parts = [$seed, 'counterexample='.var_export($this->counterexample, true)];
+
+        if ($this->nonDeterministic) {
+            $parts[] = 'non-deterministic: verdict flipped on re-check, not a confirmed minimum';
+        } elseif (! $this->confirmedMinimum) {
+            $parts[] = 'not a confirmed minimum (budget-limited)';
+        }
+
+        return implode(' · ', $parts);
+    }
 }
