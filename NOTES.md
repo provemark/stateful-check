@@ -1835,3 +1835,25 @@ reported value flips exactly when the runner re-checks it. A side effect makes t
 every value fails on first sight, the shrink accepts the origin immediately, so the counterexample is a
 known `0`, and `evals[0] === 2` (one accept + one re-check) proves the re-check ran *exactly once, on the
 reported value only* — the D026 "exactly once" clause, asserted rather than assumed.
+
+## Step 65 — SPEC-008 finished: AC4/AC8 and what the stateless runner cost (2026-08-03)
+
+AC4 (render) is a plain mirror of `PropertyResult::counterexampleAsString()` — `var_export` for the value
+(total over PHP values, the SPEC-005 reasoning), a "not a confirmed minimum" marker split by cause
+(budget vs non-determinism). AC8 (R8's planted-bug meta-test) is **green-on-arrival**: the shrink to a
+minimum was built at AC2, so the meta-test passes on write. Non-vacuity was shown by mutation — disabling
+the shrink dropped the counterexample from `50` to the raw draw `512`, so the meta-test genuinely pins the
+*minimum*, not merely *a* failure (R8's exact demand). This is the fourth green-on-arrival kind seen and
+the cleanest: a test that codifies an already-built behaviour, kept honest by a mutation rather than a
+red-first.
+
+The whole spec came in cheap, and that is the finding worth keeping: `StatelessProperty` is ~50 lines of
+`check()` + `shrink()` over machinery that already existed (generation, value shrinking, the seeded
+`Source`, the qualification pattern). It reused every lesson from `StatefulProperty` verbatim — the
+`noInitial()`/`noCounterexample()` variance helper, the budget-as-count (D007), the re-check-as-R4-analogue
+(SPEC-002 AC8), the `var_export` render. That is the payoff of D013's "the stateful runner is a special case
+of `forAll`": building the general case first meant the special case was almost free. What it does **not**
+yet include, recorded so it is not mistaken for done: no `examples/` port of a real stateless dogfood
+property (commutativity/immutability from the content-credentials suite) — the spec's §5 motivation is
+proven expressible by AC1–AC8 but not yet *demonstrated* in `examples/`. A natural next step, its own small
+piece, not part of these ACs.

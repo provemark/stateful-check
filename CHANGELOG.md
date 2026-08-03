@@ -8,15 +8,19 @@ All notable changes to this project are documented here. Format follows
 
 ### Added
 
-- SPEC-008 (stateless property runner) — approved (maurice, 2026-08-03). The first
-  v0.2 spec (D013): a `forAll`-style entry point over one `Generator<T>` and a
-  predicate, drawing values from a seed, shrinking a failure to a minimal
-  counterexample, and reporting it — the value-level analogue of SPEC-005. Decisions
-  D025 (single generator; multi-argument via `associative`/`map`), D026 (non-determinism
-  detected by re-checking the reported counterexample once), D027 (a separate
-  `PropertyValueResult<T>`, not `PropertyResult` reused), D028 (constructor + `check()`,
-  no `forAll` facade yet). `docs/prior-art.md` gains a "stateless primitive underneath
-  — `forAll`" section.
+- SPEC-008 (stateless property runner) — **implemented** (maurice, 2026-08-03). The
+  first v0.2 spec (D013): `StatelessProperty`, a `forAll`-style entry point over one
+  `Generator<T>` and a predicate, drawing values from a seed, shrinking a failure to a
+  minimal counterexample (`PropertyValueResult<T>`), and reporting it — the value-level
+  analogue of SPEC-005. Reproducible from a seed (AC3), reports budget-limited (AC5) and
+  non-deterministic (AC6) shrinks as qualifications rather than clean minimums, guards an
+  empty run count at construction (AC7), and pins its shrink to an exact minimum with a
+  planted-bug meta-test (AC8, R8). Decisions D025 (single generator; multi-argument via
+  `associative`/`map`), D026 (non-determinism detected by re-checking the reported
+  counterexample once), D027 (a separate `PropertyValueResult<T>`, not `PropertyResult`
+  reused), D028 (constructor + `check()`, named `StatelessProperty`, no `forAll` facade
+  yet). `docs/prior-art.md` gains a "stateless primitive underneath — `forAll`" section.
+- `v0.1.0` tagged locally (not published).
 
 ## [0.1.0] - 2026-08-03
 

@@ -2,7 +2,7 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | approved                                          |
+| Status     | implemented                                       |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-08-03                               |
 | Amended    | maurice, 2026-08-03 — the entry point is named `StatelessProperty`, not the sketch's `Property`, for symmetry with `StatefulProperty` and to avoid a bare `Property` reading as ambiguous beside it. Renamed at AC1 (before any tag), so no breaking change. Sketch updated; behaviour unchanged. |
@@ -305,13 +305,16 @@ pre-approval checks below.
 Filled when status becomes `implemented`. Every acceptance criterion maps to at
 least one test; every source file maps back to this spec.
 
+All tests are in `tests/Unit/StatelessPropertyTest.php` (group `SPEC-008`) unless noted.
+Source is `src/StatelessProperty.php` and `src/PropertyValueResult.php`.
+
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
-| AC2                  | —                           | —                    |
-| AC3                  | —                           | —                    |
-| AC4                  | —                           | —                    |
-| AC5                  | —                           | —                    |
-| AC6                  | —                           | —                    |
-| AC7                  | —                           | —                    |
-| AC8                  | —                           | —                    |
+| AC1 | `StatelessPropertyTest` :: "runs n values from a seeded stream and reports success…" + "advances one seeded stream across the runs…" | `StatelessProperty::check()` (seeded loop over `Source`) |
+| AC2 | `StatelessPropertyTest` :: "reports a failing value as a counterexample that still fails, before any shrinking" (part 1) + "shrinks the failing value toward the origin to the minimal value that still fails" (part 2) | `StatelessProperty::check()`, `::shrink()`; `PropertyValueResult::$counterexample` |
+| AC3 | `StatelessPropertyTest` :: "reproduces the same draws from the same seed, and varies with a different one" + "reproduces the same counterexample from the same seed…" | `StatelessProperty::check()` (`Source::seeded`, one advancing stream) |
+| AC4 | `StatelessPropertyTest` :: "renders a failing result…" + "renders a passing result…" + "marks a budget-limited…" + "marks a non-deterministic…" + "renders any value without a fatal" | `PropertyValueResult::counterexampleAsString()` |
+| AC5 | `StatelessPropertyTest` :: "reports a budget-limited shrink as not a confirmed minimum" | `StatelessProperty::shrink()` (budget); `PropertyValueResult::$confirmedMinimum` |
+| AC6 | `StatelessPropertyTest` :: "re-checks the counterexample once and reports a non-deterministic verdict flip" | `StatelessProperty::check()` (one re-check); `PropertyValueResult::$nonDeterministic` |
+| AC7 | `StatelessPropertyTest` :: "throws at construction when the run count is below one" + "constructs without throwing when the configuration is valid" | `StatelessProperty::__construct()` (guard) |
+| AC8 | `tests/Meta/StatelessPlantedBugShrinkTest` :: "shrinks a planted stateless bug to its exact minimal counterexample" (group `meta` + `SPEC-008`) | `StatelessProperty::check()`, `::shrink()` (R8) |
