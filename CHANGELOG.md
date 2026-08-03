@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-03
+
 ### Added
 
 - Specs SPEC-001 (command contract and runner), SPEC-002 (sequence shrinking),
