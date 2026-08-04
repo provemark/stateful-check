@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-04
+
+### Added
+
+- A release guard in CI: a tag whose name disagrees with the `version` field in
+  `composer.json` now fails the build, rather than publishing a version the package
+  is not. Proven to redden on a mismatched tag and on a missing field.
+
+### Changed
+
+- `composer.json` declares an explicit `version`. Composer guesses a `path`
+  repository's version from the *branch*, reporting `dev-<branch>` even when HEAD
+  sits exactly on a tag, so a downstream package consuming this one as a local
+  sibling could not pin a version constraint against it (spec-verify D009).
+
+`src/` is unchanged since 0.2.0; this release is packaging metadata and CI only.
+
 ## [0.2.1] - 2026-08-04
 
 ### Changed
