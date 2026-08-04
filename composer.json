@@ -1,5 +1,6 @@
 {
     "name": "provemark/stateful-check",
+    "version": "0.2.1",
     "description": "Model-based (stateful) property testing for PHP: generate command sequences, check them against a shadow model, shrink failures to a minimal counterexample.",
     "keywords": [
         "testing",
