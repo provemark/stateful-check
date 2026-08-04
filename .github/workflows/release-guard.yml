@@ -1,0 +1,28 @@
+name: Release guard
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  version-matches-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # composer.json carries an explicit version field so that consumers using a
+      # Composer `path` repository can pin a constraint: Composer guesses a path
+      # repository's version from the branch, so it reports dev-<branch> even when
+      # HEAD sits exactly on a tag (spec-verify D009). Nothing else keeps that field
+      # honest — no test reads it — so a tag that disagrees with it must fail loudly
+      # rather than publish a version the package is not.
+      - name: composer.json version matches the tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          declared="$(jq -r '.version // ""' composer.json)"
+          if [ "$declared" != "$tag" ]; then
+            echo "::error::composer.json declares version '${declared:-<none>}' but the tag is '${GITHUB_REF_NAME}'. Bump the version field alongside the CHANGELOG cut, then re-tag."
+            exit 1
+          fi
+          echo "composer.json version '$declared' matches tag '$GITHUB_REF_NAME'."
