@@ -6,6 +6,16 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-04
+
+### Changed
+
+- Documentation only: the README's bank example points at the tutorial rather than
+  `examples/`, which holds other suites.
+
+Cut so downstream packages can depend on a tag instead of tracking `dev-main`.
+`src/` is unchanged since 0.2.0.
+
 ## [0.2.0] - 2026-08-03
 
 ### Added
