@@ -144,6 +144,113 @@ from the external, candidate-generation strategy in SPEC-002. Worth
 understanding before committing, but internal shrinking is not compatible with
 consuming Eris as a black box.
 
+## Value generation — how lists and strings are drawn and shrunk
+
+Everything above is about command sequences. SPEC-010 needed the layer below it —
+strings, lists, uniqueness — and this section did not exist when that spec was
+drafted, which is why writing it was a pre-approval task (§8). It changed three
+things in the spec, listed at the end.
+
+**Verified 2026-08-19 by reading the source:** fast-check
+`packages/fast-check/src/arbitrary/_internals/ArrayArbitrary.ts` and
+`arbitrary/string.ts`; Hypothesis
+`hypothesis/src/hypothesis/internal/conjecture/shrinker.py` and
+`strategies/_internal/{strings,collections}.py`.
+
+**A string is a list of characters — in both.** fast-check's `fc.string` is
+`array(charArbitrary).map(patternsToStringMapper, unmapper)`; Hypothesis's
+`TextStrategy` literally extends `ListStrategy[str]` (it keeps a `draw_string`
+fast path for the single-character element strategy, but the shrink model is the
+list's). Neither has a bespoke string shrinker. That is the strongest argument
+for building `strings()` and `listsOf()` from one mechanism rather than two.
+
+**Length is counted in units, never bytes.** fast-check's `unit` option exists
+precisely because "how long is a string" is ambiguous: `'grapheme'`,
+`'grapheme-composite'`, `'grapheme-ascii'` (the default — printable ASCII),
+`'binary'`, `'binary-ascii'`, or any `Arbitrary<string>`. `minLength`/`maxLength`
+count *those units*, not `String.length`. Hypothesis counts Python characters,
+i.e. code points, and takes the alphabet as an explicit `IntervalSet` of code
+points. Nobody counts bytes.
+
+**Remove before simplify, reached two different ways.**
+
+- fast-check does it by candidate order, in `ArrayArbitrary.shrinkImpl`: first the
+  stream from `this.lengthArb.shrink(value.length, …)` — and `this.lengthArb =
+  integer({ min: minLength, max: maxGeneratedLength })`, so length shrinking *is*
+  integer shrinking and can never go below `minLength`; then `shrinkItemByItem`;
+  then a lazy recursion on `safeSlice(value, 1)` re-prefixed with item 0 and
+  filtered by `this.minLength <= v[0].length + 1`. Two details worth having read:
+  while `value.length > this.minLength` the item-by-item pass is called with
+  `endIndex = 1`, i.e. only the *first* item is simplified before the recursion
+  takes over; and length candidates are materialised as `const sliceStart =
+  value.length - lengthValue.value` followed by `safeSlice(value, sliceStart)` —
+  fast-check keeps the **suffix** and drops from the front.
+- Hypothesis does it by *ordering the whole choice sequence*, not by ordering
+  passes. `sort_key` (verbatim): "We define sort_key so that x is simpler than y
+  if x is shorter than y or if they have the same length and
+  `map(choice_to_index, x) < map(choice_to_index, y)`" — shortlex. Deleting a
+  choice always beats simplifying one, for every strategy at once, because the
+  comparison puts length first.
+
+**Hypothesis states our R3 in its own words.** From the `Shrinker` docstring:
+"The desired end state of shrinking is to find a value such that no shrink pass
+can make progress, i.e. that we are at a local minimum for each shrink pass."
+Independent support for refusing to claim minimality beyond a documented local
+minimum.
+
+**Character simplification is an explicit order over the alphabet, not code
+point order.** Hypothesis shrinks a character by
+`IntervalSet.index_from_char_in_shrink_order`, plus `_natural_simpler_chars`,
+which offers case-mapped and NFD/NFKD-decomposed replacements "so that e.g. `ß`
+can shrink to `s` via casefold", keeping only candidates with a strictly smaller
+index in shrink order. SPEC-010's "shrink toward the alphabet's first character"
+is the same idea with the ordering handed to the caller: alphabet order *is*
+shrink order.
+
+**Length: drawn, or not drawn.** This is where the two disagree outright.
+fast-check draws a length from an integer arbitrary. Hypothesis draws no length
+at all: `ListStrategy.do_draw` calls `cu.many(data, min_size, max_size,
+average_size)` and loops `while elements.more()`, one continuation decision per
+element (`average_size = min(max(min_size * 2, min_size + 5), 0.5 * (min_size +
+max_size))`). The continuation-probability model only shrinks well *because*
+Hypothesis shrinks the underlying choice sequence internally; with an external
+shrinker over a finished value there is nothing to delete. So the fast-check
+model is the one that fits this codebase — a drawn size is an `integers()` whose
+context SPEC-006's argument family already knows how to shrink.
+
+**Uniqueness: neither library guarantees the minimum.** This is the finding that
+settled SPEC-010's open question about `subsetOf`.
+
+- fast-check filters. `preFilter` builds a set and `tryAdd`s each item; the
+  comment at its other call site is explicit that "`preFilter` only drops items,
+  it does not reorder them or add some more". In `shrinkImpl`: "We need to
+  explicitly apply filtering on shrink items has they might have duplicates (on
+  non shrunk it is not the case by construct)" — so a shrink candidate of a
+  `uniqueArray` is the length the shrinker asked for *minus* whatever
+  deduplication removed, and nothing re-checks `minLength` afterwards.
+- Hypothesis rejects. `UniqueListStrategy.do_draw` draws through a
+  `FilteredStrategy` whose predicate is "not yet in the unique list"; when that
+  filtered draw fails it calls `elements.reject("Aborted test because unable to
+  satisfy …")`, i.e. it throws the whole test case away rather than returning a
+  short list. Its closing `assert self.max_size >= len(result) >= self.min_size`
+  is upheld by aborting, not by construction.
+
+Both are acceptable there and neither is acceptable here: our consumer's
+generated value must satisfy the schema it came from, and a list below `minItems`
+does not. Drawing a bounded subset of a *fixed choice set* is a third option that
+guarantees distinctness and the minimum without probabilistic retries — at the
+price of only applying where the item schema is a finite, enumerable set.
+
+**What this changed in SPEC-010.** Its AC on string/list shrink order was written
+before this section existed and survives it: both mature implementations agree on
+remove-before-simplify. Three things did change. (a) The removal *direction* was
+unstated and is now a recorded decision rather than an implementation accident —
+fast-check keeps the suffix, and it would have been easy to write the opposite
+without noticing there was a choice. (b) Single-direction removal is a weaker
+deletion family than Hypothesis's adaptive interval deletion, and that limit is
+now stated under R3 instead of being discovered later. (c) `subsetOf` stopped
+being a question of taste: the prior art shows what happens without it.
+
 ## The PHP graveyard
 
 Two data points, both worth taking seriously.
