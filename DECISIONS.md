@@ -666,3 +666,217 @@ edge-set (OQ3 neighbours) dilutes each edge's share and would need a higher freq
 the same reliability; a much wider range or smaller budget shifts it too.
 Revisit if: OQ3 adds neighbours to the edge-set (re-measure — each edge's share drops), or a
 real suite's range/budget differs enough that 10% under- or over-shoots.
+
+## D031 — String lengths are counted in characters (code points), not bytes
+
+Spec: SPEC-010, OQ3
+Status: **decided**
+Decided: maurice, 2026-08-23
+Decision: `Gen::strings()` counts `minLength`/`maxLength` in Unicode **code points**.
+The implementation uses `preg_*` with the `/u` modifier; `strlen`, `substr` and
+`str_split` are forbidden in this code path, and **no new runtime dependency is
+added** — in particular not `ext-mbstring`.
+Because: the named consumer (`stateful-check-mcp` SPEC-004) derives its bounds from
+JSON Schema, where `minLength` counts characters per RFC 8259. Counting bytes would
+break that in the fatal direction: at `minLength: 3` over an alphabet containing `é`
+a byte-counting generator emits a two-character string, i.e. an *invalid* value
+presented as valid, which is the one thing a generation layer may never do. The prior
+art is unanimous — fast-check counts units (with an explicit `unit` option, because
+the question is genuinely ambiguous), Hypothesis counts Python characters, nobody
+counts bytes.
+Correction this decision carries: the SPEC-010 draft stated the cost as "must use
+`mb_*`", which would have made `ext-mbstring` this package's first runtime dependency
+(`composer.json` requires only `php`). That cost was overstated. Generation never
+measures a string — a length is drawn, that many characters are taken, the result is
+imploded — and shrinking only needs to split a string back into code points, which
+`preg_split('//u', …)` does with PCRE's built-in Unicode support.
+Caveat (stated, not hidden): `preg_*` with `/u` returns `false` on malformed UTF-8
+rather than raising. Since the consumer's alphabet and origin are derived from a
+schema published by the server under test — untrusted input by that project's policy
+— a broken schema would otherwise produce a generator that silently yields nothing.
+SPEC-010 AC10 therefore validates UTF-8 at construction and distinguishes "invalid
+UTF-8" from "more than one character" in its message.
+Revisit if: a consumer needs byte-oriented or binary strings — that is a separate
+generator with a separate spec, not a flag on this one.
+
+## D032 — `strings()` takes an optional shrink origin
+
+Spec: SPEC-010, OQ11
+Status: **decided**
+Decided: maurice, 2026-08-23
+Decision: `Gen::strings(int $minLength, int $maxLength, array $alphabet, ?string
+$origin = null)`. The origin defaults to `$minLength` repetitions of the alphabet's
+first character — the behaviour AC4 already specified — so no call site changes. An
+explicit origin must lie within the length bounds and consist of alphabet characters;
+violating either throws at construction, per D015's implicit-clamp / explicit-throw
+rule.
+Because: this repairs a contradiction the SPEC-010 draft shipped with. Its §4
+necessity audit admitted `strings()` partly on `stateful-check-mcp` SPEC-004 AC13,
+cited in the table as "`default` as the shrink origin", while the signature had no
+origin and AC4 fixed the shrink target at the alphabet's first character. The spec
+justified a combinator with a criterion it could not satisfy. Mirroring `floats()`,
+which already has `?float $origin`, is the smallest fix and adds no new concept.
+Process note worth keeping: the audit missed this because its question was "can the
+*existing* combinators express this?" and it never asked whether the *proposed* one
+did. The §4 table needs both columns checked the next time it is filled in.
+Open consequence: an explicit origin must be drawn from the alphabet, so a consumer
+whose alphabet is a small set of *interesting* characters must union the `default`'s
+characters into it — `"admin"` shares none with quotes/backslash/`é`/an astral
+character. SPEC-010 OQ12 recommends keeping the strict rule and doing the union in the
+consumer (the alternative offers shrink candidates that generation could never have
+produced), and SPEC-004 AC13 needs a matching amendment before either spec is
+approved.
+Revisit if: a real consumer wants an origin outside its alphabet badly enough to
+accept candidates that are not in the generator's own range.
+
+## D033 — `floats()` stays in the engine
+
+Spec: SPEC-010, OQ1
+Status: **decided**
+Decided: maurice, 2026-08-27
+Decision: `Gen::floats(float $min, float $max, ?float $origin = null)` is part of SPEC-010.
+Because: the substitute was real and was weighed rather than dismissed — `Gen::map(fn (int
+$i) => (float) ($i / $scale), Gen::integers($min * $scale, $max * $scale, 0))` satisfies
+the named consumer's AC6 example today. It lost on ownership: it leaves the scale unowned,
+overflows D016's guard on wide bounds, and relocates "how a double is drawn and shrunk"
+into a consumer that has no business holding it.
+Cost of the road not taken, stated because it was costed before the choice: cutting
+`floats()` would have given `stateful-check-mcp` SPEC-004 a scale parameter, generated
+every `{"type":"number"}` on a fixed grid, and obliged every report to disclose that each
+number-valued argument a server ever received from us was a multiple of that grid step.
+Revisit if: the float path proves to carry no weight in real suites — then it is a
+deprecation with a migration to the `map` form, not a silent removal.
+
+## D034 — `subsetOf()` stays, and stays narrow
+
+Spec: SPEC-010, OQ2
+Status: **decided**
+Decided: maurice, 2026-08-27
+Decision: `Gen::subsetOf(array $choices, int $min, int $max)` is part of SPEC-010. It
+covers distinctness over a **finite, enumerable** choice set only, and this is not a
+general `uniqueItems` combinator.
+Because: evidence, not taste. The prior-art reading shows fast-check deduplicating shrink
+candidates with a filter that "only drops items" — leaving candidates below the requested
+length, with no minimum re-checked — and Hypothesis aborting the test case when it cannot
+draw a fresh element. For a consumer whose entire promise is "every value we generate
+satisfies its schema", the first is an invalid value presented as valid and the second is
+nondeterminism inside a seeded run. Neither is available to us, so there is no free
+implementation to defer to.
+Cost of the road not taken: cutting it would have made `stateful-check-mcp` refuse every
+`uniqueItems` schema by name — honest, but visible, since arrays of distinct ids are
+common in real tool arguments.
+Caveat (stated, not hidden): keeping `subsetOf` did **not** make `uniqueItems` general. A
+non-enumerable item schema — `{"type":"array","items":{"type":"string"},"uniqueItems":
+true}` — remains unsupported and is refused or dropped by the consumer under its AC18.
+That limit was discovered during the necessity audit and is the reason the consumer's
+AC10 was rewritten.
+Revisit if: a consumer needs uniqueness over a non-enumerable item generator — that needs
+its own spec, choosing explicitly between filtering (breaks the minimum) and rejection
+(breaks determinism).
+
+## D035 — `strings()` ships no default alphabet
+
+Spec: SPEC-010, OQ4
+Status: **decided**
+Decided: maurice, 2026-08-27
+Decision: the `$alphabet` argument of `Gen::strings()` is **required**. The engine ships
+no default alphabet, conservative or otherwise.
+Because: the engine has no opinion about which characters are interesting, and its only
+named consumer has a strong one. The asymmetry settles it: *adding* a default later is
+backwards compatible, while *changing* a shipped one changes what every recorded seed in
+the world reproduces. Neither dogfood suite generates free strings, so there is no
+in-house call site arguing for the convenience either.
+Cost: one extra argument at every call site, including in this spec's own tests.
+Revisit if: a default is ever wanted — it can be added without breaking anything, which
+is precisely why not shipping one now is the cheap direction.
+
+## D036 — list and string shrinking removes from the end
+
+Spec: SPEC-010, OQ5
+Status: **decided**
+Decided: maurice, 2026-08-27
+Decision: every removal in the deletion family takes elements from the **end**, so a
+shrink candidate is a *prefix* of the value it came from. SPEC-010 AC6 asserts it.
+Because: this is a deliberate divergence from the cited blueprint, and it would have been
+an accident if the prior art had not been read. fast-check's array shrinker computes
+`sliceStart = value.length - lengthValue.value` and keeps the **suffix**, dropping from
+the front. A prefix is the version a reader of a failure report can check by eye ("the
+first two items already fail"), and it matches how SPEC-002 shrinks a command sequence by
+holding a prefix — one mental model across the codebase rather than two.
+Caveat: both directions are legal local minima under R3. What mattered was recording the
+choice and having AC6 assert it, so an implementation cannot quietly do the other.
+Revisit if: never on aesthetics. Only a measured shrink-quality difference would justify
+flipping it, and flipping it changes every recorded seed's shrink output.
+
+## D037 — optional keys are a parameter on `associative()`, not a new `record()`
+
+Spec: SPEC-010, OQ6
+Status: **decided**
+Decided: maurice, 2026-08-27
+Decision: keys that may be absent are a second parameter on the existing `associative()`,
+with absence as the shrink target. No `record()` combinator is added.
+Because: it adds no new concept, leaves every existing call and test untouched, and keeps
+"a keyed record" one thing in the user's head. A separate `record()` would leave two
+combinators differing only in whether keys may be absent. D025's reasoning — compose, do
+not multiply entry points — applies unchanged.
+Revisit if: the parameter list grows enough that `associative()` needs an options object,
+which is a refactor of the signature and not a second combinator.
+
+## D038 — floats shrink origin-first, then halve
+
+Spec: SPEC-010, OQ7
+Status: **decided**
+Decided: maurice, 2026-08-27
+Decision: `floats()` offers the origin first, then binary-search halving toward it,
+stopping at a bounded step count — the same shrink model `integers()` uses.
+Because: the alternative, simplifying toward "nice" decimals as fast-check does, reads
+more pleasantly in a report but requires a definition of *nice*, and this engine has no
+precedent for one. One shrink model in the codebase beats two, and the bounded step count
+keeps the candidate sequence finite as the `Generator` contract requires.
+Dependency worth recording: this question was only live because D033 kept `floats()`.
+Cutting it would have made this moot — the questions were answered in that order on
+purpose.
+Revisit if: float counterexamples in real reports prove hard to read, which is a
+measurement, not a hunch.
+
+## D039 — edge-biasing is not extended to the new generators here
+
+Spec: SPEC-010, OQ8
+Status: **decided (deferred)**
+Decided: maurice, 2026-08-27
+Decision: SPEC-010 does not extend SPEC-009's `edgeBias` to `strings()`, `listsOf()`,
+`floats()` or `subsetOf()`. Named follow-up, not a silent omission.
+Because: the plumbing would be nearly free — lengths here are drawn with `integers()`,
+which already takes the opt-in parameter — and the natural edges are obvious
+(`minLength`/`maxLength`, the empty list, the bounds of a float range). It is deferred
+anyway because D029 made bias opt-in **and measured**: D030's 10% is a measured figure for
+one configuration, not a constant, so extending bias to new generators needs its own
+measurement and would double this spec's test surface.
+Why deferring is safe: bias is opt-in by construction, so adding it later changes no
+recorded seed. That is what makes this a deferral rather than a gap.
+Revisit if: SPEC-010 lands and a real suite wants biased strings or lists — then it is a
+spec with a measurement, in the D030 shape.
+
+## D040 — an explicit string origin must be drawn from the alphabet
+
+Spec: SPEC-010, OQ12
+Status: **decided**
+Decided: maurice, 2026-08-27
+Decision: an explicit `$origin` passed to `Gen::strings()` must consist of characters from
+`$alphabet`; violating that throws at construction (AC10). The engine does **not** offer
+an out-of-alphabet origin as a bare extra shrink candidate.
+Because: every shrink candidate must remain a value the generator could itself have
+produced. An origin outside the alphabet would be reachable only as a special-cased jump,
+producing candidates outside the generator's own range — exactly the asymmetry the
+`Generator` contract exists to prevent, and the kind of special case that later makes a
+shrink sequence impossible to reason about.
+Consequence, accepted deliberately and landing on the consumer: `stateful-check-mcp`
+SPEC-004 chooses a small alphabet of *interesting* characters (quotes, a backslash, an
+accented character, an astral character) and `"admin"` — the `default` in its own AC13 —
+shares no character with it. Its derivation therefore unions the default's characters into
+the alphabet, in a deterministic order, and **records the union in the report**, because
+widening the alphabet widens what the server under test actually sees. SPEC-004 AC13
+carries that amendment.
+Revisit if: a consumer wants an origin outside its alphabet badly enough to accept
+candidates outside the generator's range — which would need the `Generator` contract
+revisited first, not just this rule.

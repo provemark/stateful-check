@@ -1933,3 +1933,257 @@ edge/boundary/degenerate bugs AI code and its co-written tests share a blind spo
 or `strings()` only matters once the argument is a float or free text, and then for its *edge-set*, not its
 uniform draw. Edge-biasing was the right first generation feature to build because it needs no new type —
 only smarter sampling of the types already owned.
+
+## Step 69 — D024's revisit condition fired: SPEC-010 drafted for the value generators (2026-08-18)
+
+D024 refused a string generator and, unusually, wrote down the exact condition under which it would come
+back: a concrete case with a **free text field as a command argument**, and specifically "the separate
+AI-generated-code verification package that will build on this engine". That package now exists as
+`provemark/stateful-check-mcp`, and its SPEC-004 derives generators from an MCP tool's JSON Schema. A
+schema saying `{"type":"string","minLength":3}` is a free text field as a command argument. The condition
+fired exactly as written, which is the first time a deferral in DECISIONS.md has been resolved by the
+mechanism it specified rather than by someone remembering it.
+
+Worth recording that the deferral **paid off in scope**: because the trigger arrived with a named consumer
+carrying its own acceptance criteria, the spec could be sized against those criteria instead of against a
+feature checklist. That is the difference between "add strings, floats, lists" and the shape SPEC-010
+actually took.
+
+**The gap is one idea, not six combinators.** Reading the current set against the consumer's needs: every
+generator the engine owns produces a shape fixed at construction — a record with known keys, a choice among
+known values, a bounded integer. What is missing is **variable arity**: nothing here draws a size. A string
+is *n* characters, a list is *n* items, and an optional record key is the degenerate case of the same idea
+(a component that may be there zero times). That is why those three sit in one spec rather than three: they
+are one mechanism wearing three faces, and splitting them would have produced three shrinks that must agree
+with each other, written a week apart.
+
+The other two additions turned out to be almost nothing, which is only visible by reading the code rather
+than the docs. `booleans()` is `elements([false, true])` — a name and a promised origin, no machinery. And
+`oneOf()` **already exists**: `AlphabetGenerator` is type-agnostic at runtime, and only its `@template`
+parameters tie it to `Command`. The 2026-07-30 audit removed `oneOf` from the user-facing surface, not from
+the codebase. So the honest description of SPEC-010 is "variable arity, floats, and two names", which is a
+much smaller thing than the six-line wish list it started as.
+
+**D024's second half is what shapes every AC**, and it is the part that would be easiest to lose: a
+generator without its origin-ward shrink is worse than no generator, because it drops an un-shrinkable value
+into a counterexample and silently degrades SPEC-006's guarantee. So no AC in SPEC-010 may be split into
+"generate now, shrink later", and the sequence generators commit to a specific shrink order — **remove
+elements before simplifying them**, never below the declared minimum. For a report that ordering is the
+whole value: "it fails at any 4-character name" teaches a reader something; a 64-character string with
+simpler letters does not.
+
+Two pre-approval gates are open and are in the spec as questions 7 and 8. R10 reduces to re-confirming
+D017's covariance for a heterogeneous `oneOf` branch list (no new `@template` type is introduced). §8 is
+the awkward one: `docs/prior-art.md` records nothing about *value* generation — it was written about command
+sequences and shrinking — so this is the first spec that has nothing to cite. It needs a short section on
+how fast-check and Hypothesis shrink lists and strings before approval, precisely so a disagreement with
+AC5/AC7's ordering surfaces now rather than during implementation.
+
+One blocker among the open questions: **characters or bytes**. The recommendation is code points, because
+the consumer implements JSON Schema, where `minLength` counts code points — but it makes `strlen` a bug
+throughout the implementation, and that is a constraint worth deciding before code exists rather than after
+`mb_*` has been half-applied.
+
+Ran the R10 gate the same day rather than leaving it to approval: a throwaway file returning
+`list<Generator<mixed>>` built from `integers()`, `elements()` and `associative()` — three different type
+arguments — analysed clean at `--level=max`, and was deleted. D017's covariance holds for a heterogeneous
+branch list, so `oneOf` has nothing to answer there. §8's prior-art gap is the one that is still open.
+
+## Step 70 — the necessity audit cut one generator, and the prior-art gap closed with three findings (2026-08-19)
+
+SPEC-010 went into a §4 audit before approval, one candidate at a time against the consumer's acceptance
+criteria: *can the current six combinators already express this, and if not, what exactly breaks?* Seven
+candidates went in, six came out, and two of the survivors came out with a different argument than they went
+in with. Worth recording that the audit was cheap — an hour of reading `ElementsGenerator`,
+`AssociativeGenerator` and `AlphabetGenerator` — and that it moved in both directions: it removed a
+generator and it *strengthened* an acceptance criterion.
+
+**`booleans()` is cut.** `Gen::elements([false, true])` yields both values and shrinks `true → false`,
+because `ElementsGenerator` shrinks toward index 0 and its deduplication is strict (`in_array($choice,
+$unique, true)`, so `false` and `true` survive as two choices). The draft had defended it as "a name and a
+promised origin, not machinery" — which is exactly the argument the 2026-07-30 audit rejected when it removed
+`bool` in the first place. Being consistent with a decision means applying it to yourself.
+
+**The most interesting find was in the opposite direction.** Optional record keys looked like the clearest
+"impossible today" case, and they are not: `map` over `associative(['keep' => elements([false, true]), 'b' =>
+$g, …])`, stripping `b` when the flag is false, generates both shapes and even shrinks toward absence, since
+`elements` shrinks the flag to `false` and `associative` reduces components in declaration order. The
+composition breaks one step later. Once the flag has reached `false`, every further shrink of `b`'s value maps
+back to the same record — candidates equal to the value they came from, which is the one thing the `Generator`
+contract forbids and the invariant the greedy loop's termination rests on. So the parameter stays, but the
+reason is now precise rather than "nothing has variable arity", and AC8 gained a clause ("once `b` is absent
+no further candidate re-adds it or repeats the same record") that the earlier draft did not think to require.
+
+**Two survivors are now explicit questions instead of assumptions.** `floats()` has a working substitute —
+`map(fn (int $i) => (float) ($i / $scale), integers(...))` — that satisfies the consumer's own AC6 example;
+what it does not do is own the scale, and it overflows D016's guard on wide bounds. `subsetOf()` has none.
+Both are recommended in, with the exact consequence of cutting them written down: a fixed number grid the
+consumer's reports must disclose, and a by-name refusal of every `uniqueItems` schema, respectively. A
+recommendation with its cut version costed is worth more than a recommendation.
+
+**The default alphabet is gone, on an asymmetry.** The draft shipped a conservative ASCII default. Adding a
+default later is backwards compatible; changing a shipped one changes what every recorded seed in the world
+reproduces. The engine has no opinion about which characters are interesting, its only named consumer passes
+its own, and neither dogfood suite generates free strings — so the alphabet is required, and question 4 is
+answered by deletion rather than by picking a constant.
+
+**§8's gap is closed.** `docs/prior-art.md` had nothing about *value* generation; it now has a section
+written by reading fast-check's `ArrayArbitrary` and `string.ts` and Hypothesis's `shrinker.py`,
+`strings.py` and `collections.py`. Three things came out of it.
+
+First, AC4/AC6's ordering survives, and the two implementations reach it by different routes:
+fast-check by candidate order (the `lengthArb.shrink()` stream is joined *before* `shrinkItemByItem`), and
+Hypothesis by ordering the entire choice sequence — `sort_key` is shortlex, "x is simpler than y if x is
+shorter than y", so deletion beats simplification for every strategy at once, without a pass ordering to get
+wrong. Hypothesis also states R3 in its own docstring: "we are at a local minimum for each shrink pass".
+
+Second, a choice we were about to make by accident. fast-check's length candidates are
+`sliceStart = value.length - lengthValue.value` — it keeps the **suffix** and drops from the *front*. Removing
+from the end is the obvious thing to write, and would have been a silent divergence from the blueprint; it is
+now open question 5 with a recommendation (remove from the end, so a candidate is a prefix, matching how
+SPEC-002 holds a prefix of a command sequence) rather than an implementation detail nobody chose.
+
+Third, the uniqueness question turned from taste into evidence. fast-check's `uniqueArray` deduplicates shrink
+candidates with a `preFilter` that "only drops items", leaving a candidate shorter than the length the
+shrinker asked for and re-checking no minimum; Hypothesis rejects the whole test case ("Aborted test because
+unable to satisfy") when it cannot draw a fresh element. Both are fine there and neither is available to a
+consumer whose promise is that every generated value satisfies its schema — a list below `minItems` is an
+invalid value presented as valid, and a rejected draw is nondeterminism in a seeded run. `subsetOf` over a
+finite choice set has neither problem, and its limit (finite enumerable choices only) is now in the scope
+section instead of being implied.
+
+One bookkeeping item: SPEC-003's out-of-scope list said the audited-out combinators return "in its own
+amendment", and the draft never said which. SPEC-010's header now records that it amends that list for
+`oneOf` and leaves `bool`, `filter`, `tuple` and `vector` out — so the single place recording "which
+combinators do not exist and why" stays true after this spec lands.
+
+## Step 71 — the blocker fell, and answering it exposed a combinator justified by a criterion it could not meet (2026-08-23)
+
+Two decisions, D031 and D032. The first was the question the spec was waiting on; the
+second is one nobody had asked, and it is the more interesting of the two.
+
+### D031 — code points, and a cost that turned out to be imaginary
+
+`strings()` counts characters, not bytes. The argument was never really in doubt: the
+named consumer derives its bounds from JSON Schema, where `minLength` counts characters
+per RFC 8259, and the prior art is unanimous. What decided it beyond taste is the
+*direction* of the failure. Counting bytes does not merely produce shorter strings than
+intended — at `minLength: 3` over an alphabet containing `é` it produces a
+two-character string, an invalid value presented as valid. That is the one thing a
+generation layer may never do, so bytes were never really an option and the spec should
+have said so more plainly than "subtly wrong".
+
+The part worth recording is that the draft got the *price* wrong. It said the
+implementation "must use `mb_*`", which would have made `ext-mbstring` this package's
+first runtime dependency — `composer.json` requires `php` and nothing else, and that is
+a property worth keeping. But `mb_*` is not needed. Generation never measures a string:
+draw a length *n*, take *n* characters from the alphabet, implode. The length is known
+because it was chosen. Only shrinking has to split a string back into code points, and
+`preg_split('//u', …)` does that with PCRE's Unicode support, which is compiled in by
+default.
+
+So a stated cost that would have argued *against* the right answer evaporated on
+inspection. The lesson is narrow but real: when a spec prices an option, the price is a
+claim like any other and deserves the same scrutiny as the recommendation it supports.
+This one had gone unchallenged through two drafts.
+
+`preg_*` with `/u` charges its own price, though: it returns `false` on malformed UTF-8
+rather than raising. The consumer's alphabet and origin come from a schema published by
+the server under test, which that project treats as untrusted by policy — so a broken
+schema would have produced a generator that silently generates nothing. AC10 now
+validates UTF-8 at construction and distinguishes "invalid UTF-8" from "more than one
+character" in the message.
+
+### D032 — the audit table cited a criterion the proposed API could not satisfy
+
+While closing D031 the `strings()` signature came up for review, and it had no origin
+parameter. AC4 fixed the shrink target at `minLength` repetitions of the alphabet's
+first character. Meanwhile the §4 necessity table justifies `strings()` with, in its own
+words, "AC13 (`default` as the shrink origin)" — a consumer criterion demanding that
+shrinking move toward the schema's declared default.
+
+Those cannot both be true. The spec admitted a combinator on the strength of a
+requirement its own API could not meet, and it did so in a table whose entire purpose is
+to prove each addition necessary.
+
+The fix is small — `?string $origin = null`, mirroring `floats()`, defaulting to the old
+behaviour so AC4's first half and every existing call are untouched. The process finding
+is the part to keep. The audit asked one question of each candidate: *can the existing
+combinators express this?* It never asked the second: *does the proposed one?* Seven
+candidates went through that filter and this is the one where the omission mattered,
+which is exactly how such a gap survives — six correct answers make the method look
+sound. The §4 template needs both columns.
+
+There is a real consequence, now OQ12 and flagged as needing a matching amendment on the
+consumer side before either spec is approved. An explicit origin must consist of
+alphabet characters, so that every shrink candidate stays a value the generator could
+itself have produced. But the consumer's alphabet is chosen for being *interesting* —
+quotes, a backslash, an accented character, an astral character — and `"admin"` shares
+not one character with it. So the consumer has to union the default's characters into
+the alphabet it passes, and say so in its report, because widening the alphabet widens
+what the server sees. The alternative (let the origin sit outside the alphabet and offer
+it as a bare extra candidate) would create shrink candidates that generation could never
+produce, which is the asymmetry the `Generator` contract exists to prevent.
+
+Seven of the ten open questions remain, none of them blocking. Still nothing
+implemented.
+
+## Step 72 — SPEC-010 has no open questions left: eight decisions, two of them close calls that were costed first (2026-08-27)
+
+D033 through D040. The spec went from twelve numbered questions to twelve numbered
+answers; nothing in it is now waiting on anyone. What follows is only what is worth
+remembering, not a restatement of DECISIONS.md.
+
+### The two that were genuinely close, and why they were answerable at all
+
+`floats()` (D033) and `subsetOf()` (D034) were the two the necessity audit admitted with
+"judgement call" rather than a clean yes. Both were kept. The reason the decision took
+minutes rather than another round is that Step 70 had already **costed the cut version**
+of each — a scale parameter and a grid-disclosure obligation on the consumer for
+`floats()`, a by-name refusal of every `uniqueItems` schema for `subsetOf()`. A
+recommendation with its alternative priced is a decision waiting to be made; a
+recommendation on its own is an invitation to think about it again later.
+
+That is the transferable bit. It costs one paragraph at draft time and it converts a
+"decide before tests" question into a yes.
+
+`subsetOf()` keeps its narrowness either way, and the DECISIONS entry says so out loud:
+keeping it did **not** make `uniqueItems` general. A non-enumerable item schema is still
+unsupported. Writing that into the decision rather than only into the spec means the
+limit survives being read out of context.
+
+### One dependency between questions, which is why order mattered
+
+D038 fixes how floats shrink. It was only a live question because D033 kept `floats()`;
+had it been cut, D038 would have been a decision about something that does not exist.
+Answering them in that order was deliberate, and it is the kind of thing a list of
+"non-blocking questions" hides — non-blocking with respect to the *spec* is not the same
+as independent of each other.
+
+### D036 is a divergence from the blueprint, not an implementation detail
+
+Removals take from the end, so a shrink candidate is a prefix of its predecessor.
+fast-check does the opposite — `sliceStart = value.length - lengthValue.value` keeps the
+suffix. Ours is the better default here for one specific reason: a prefix is what a reader
+of a failure report can verify by eye, and it matches SPEC-002's command-sequence shrink,
+so the codebase has one mental model instead of two.
+
+Worth noting how close this came to being nothing. Removing from the end is the obvious
+thing to write, and had `docs/prior-art.md` not been written for the §8 gate, it would
+have gone in as a habit and silently disagreed with the implementation this spec cites as
+its model. The gate paid for itself on a question nobody had thought to ask.
+
+### Deferring D039 is safe for a structural reason
+
+Edge-biasing is not extended to the new generators. The reason that is a deferral rather
+than a gap: bias is opt-in by construction (D029), so adding it later changes no recorded
+seed. A deferral whose safety rests on a structural property is worth distinguishing from
+one that rests on nobody needing it yet.
+
+### Where this leaves the spec
+
+Twelve questions, twelve answers, both pre-approval gates closed (R10 run, §8 prior art
+written), and the §4 audit corrected for the omission D032 exposed. The spec is ready for
+the approval stamp; it is still `draft` and nothing is implemented. Next is approval, then
+tests-first implementation of thirteen acceptance criteria, then a release the MCP adapter
+can depend on — it currently pins `^0.2` and cannot see any of this.
