@@ -80,6 +80,20 @@ final class Gen
     }
 
     /**
+     * Uniform choice among branches of any type (SPEC-010 AC1) — the mechanism the command
+     * alphabet already contained, without its Command typing. The generated value's context
+     * records which branch was chosen, so shrinking delegates to the generator that produced the
+     * value. The branch choice itself is not shrunk (the documented gap from SPEC-003 AC5).
+     *
+     * @param  list<Generator<mixed>>  $branches
+     * @return Generator<mixed>
+     */
+    public static function oneOf(array $branches): Generator
+    {
+        return new OneOfGenerator($branches);
+    }
+
+    /**
      * Uniform choice over a command alphabet (SPEC-003 AC5). The generated value's context records
      * which branch was chosen, so shrinking delegates the command's argument-shrinking to the
      * generator that produced it. The branch choice itself is not shrunk (a documented coverage
