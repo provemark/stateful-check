@@ -209,13 +209,28 @@ finite, and it never yields the value it was given.
   - When each is run across a fixed set of seeds and every value is shrunk,
     always taking the first candidate
   - Then every generated value lies within the bounds and is finite (never
-    `NAN`, never `INF`); the first shrink candidate is the origin itself; the
-    following candidates approach the origin monotonically; and the sequence
-    terminates in a bounded number of steps.
+    `NAN`, never `INF`); the first shrink candidate is the origin itself; each
+    following candidate lies strictly between its predecessor and the generated
+    value, so every candidate stays strictly nearer the origin than the value it
+    was shrunk from while its distance to the origin grows monotonically; and
+    the sequence terminates in a bounded number of steps.
   - *The origin-first candidate is what makes termination trivial and mirrors
     `integers`. Halving alone cannot reach an arbitrary float in finite steps —
     stating it as "reaches the origin exactly" would be an AC nothing can
     fulfil (R11).*
+  - *The ordering after the origin is the greedy loop's retry-less-aggressively
+    order, which is what `integers()` already produces: `integers(0, 9)` shrinks
+    8 to `[0, 4, 6, 7]`, receding from the origin rather than approaching it.
+    Once the first candidate is the origin there is nothing left to approach, so
+    the earlier wording ("the following candidates approach the origin
+    monotonically") was unfulfillable after its own first clause — the R11-(a)
+    failure AC4 had, in the AC that mirrors `integers` by name (D038).*
+  - *The bound on the step count is a requirement here, not an implementation
+    detail: unlike `intdiv`, halving a float reaches zero only through the
+    denormals, after roughly a thousand steps, and rounding can make the next
+    candidate equal the value it came from — which the `Generator` contract
+    forbids (AC11). `floats()` therefore stops at a fixed step count and skips a
+    candidate that is not strictly between its predecessor and the value.*
 
 - **AC3 — `strings()` respects its length bounds and its alphabet**
   - Given `Gen::strings(3, 6, ['a', 'b', 'c'])` and
