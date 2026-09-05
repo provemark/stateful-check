@@ -203,3 +203,15 @@ it('never re-adds an optional key once it is absent, and never repeats the recor
             ->and($candidate->value)->not->toBe($absent->value);
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC10 (records) — the same key required AND optional is a contradiction, not a
+ * preference: the key would have to be present in every value and absent from some. Letting one
+ * side win silently would make the record's shape depend on an implementation detail nobody chose.
+ */
+it('rejects a key that is both required and optional', function () {
+    $g = Gen::integers(0, 9);
+
+    expect(fn () => Gen::associative(['a' => $g], optional: ['a' => $g]))
+        ->toThrow(InvalidArgumentException::class, "associative(): key 'a' is both required and optional.");
+})->group('SPEC-010');

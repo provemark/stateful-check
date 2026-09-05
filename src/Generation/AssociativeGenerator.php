@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Provemark\StatefulCheck\Generation;
 
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -39,7 +40,17 @@ final class AssociativeGenerator implements Generator
         private readonly array $generators,
         private readonly array $optional = [],
     ) {
-        // Rejecting a key that is both required and optional is AC10's error path, not yet built.
+        // A key that is both required and optional is a contradiction, not a preference: it would
+        // have to be in every value and missing from some. Letting either side win silently would
+        // make the record's shape depend on an implementation detail nobody chose (AC10).
+        foreach (array_keys($optional) as $key) {
+            if (array_key_exists($key, $generators)) {
+                throw new InvalidArgumentException(
+                    "associative(): key '$key' is both required and optional.",
+                );
+            }
+        }
+
         $this->presence = new IntegersGenerator(0, 1);
     }
 
