@@ -39,10 +39,17 @@ final class ListsGenerator implements Generator
 
         $items = [];
         for ($i = 0; $i < $length->value; $i++) {
-            $items[] = $this->item->generate($source)->value;
+            $items[] = $this->item->generate($source);
         }
 
-        return new GeneratedValue($items, $length);
+        // The context is composite — [the drawn length, the items' own GeneratedValues] — because
+        // an item's context is opaque and cannot be recovered from the item itself. Without it a
+        // candidate could not be shrunk any further, which is why this differs from
+        // StringsGenerator, where a character's alphabet index is recoverable from the character.
+        return new GeneratedValue(
+            array_map(static fn (GeneratedValue $item): mixed => $item->value, $items),
+            [$length, $items],
+        );
     }
 
     /**
@@ -51,11 +58,51 @@ final class ListsGenerator implements Generator
      */
     public function shrink(GeneratedValue $value): iterable
     {
-        // AC6 is the next step, and it needs more than this: unlike a character, whose alphabet
-        // index can be recovered from the character itself, an item's context is opaque and cannot
-        // be reconstructed — so generate() will have to record the items' GeneratedValues too.
-        // Until then this fails loudly rather than yielding nothing, which would be
-        // indistinguishable from "already minimal" and would leave a counterexample un-shrunk.
-        throw new LogicException('ListsGenerator::shrink() arrives with SPEC-010 AC6.');
+        $context = $value->context;
+        if (
+            ! is_array($context) || ! array_is_list($context) || count($context) !== 2
+            || ! $context[0] instanceof GeneratedValue || ! is_int($context[0]->value)
+            || ! is_array($context[1]) || ! array_is_list($context[1])
+        ) {
+            // A context of the wrong shape is a generator bug, not user input. Fail loudly, as
+            // elements/map/alphabet do: yielding nothing would be indistinguishable from "already
+            // minimal" and would leave a counterexample un-shrunk with no signal.
+            throw new LogicException(
+                'ListsGenerator::shrink() expects a [GeneratedValue<int> length, list of GeneratedValue items] context.',
+            );
+        }
+
+        $length = $context[0];
+
+        // Each recorded item must itself be a GeneratedValue — checked one by one rather than
+        // assumed, because the whole point of the composite context is that the items carry their
+        // own opaque contexts. A list holding anything else is a generator bug of the same class
+        // as a malformed context, so it fails the same way.
+        $items = [];
+        foreach ($context[1] as $item) {
+            if (! $item instanceof GeneratedValue) {
+                throw new LogicException(
+                    'ListsGenerator::shrink() expects every recorded item to be a GeneratedValue.',
+                );
+            }
+
+            $items[] = $item;
+        }
+
+        // Deletion family (D036): every removal takes elements from the END, so a candidate is a
+        // PREFIX of the list it came from. fast-check keeps the suffix instead; a prefix is what a
+        // reader of a failure report can check by eye, and it matches how SPEC-002 shrinks a
+        // command sequence. Element shrinking is the second family and arrives in the next step.
+        foreach ($this->length->shrink(new GeneratedValue($length->value)) as $shrunkLength) {
+            $kept = array_slice($items, 0, $shrunkLength->value);
+
+            // The kept items carry their own contexts along, so a candidate can be shrunk again —
+            // by deletion first, then by element. Dropping them here would silently end shrinking
+            // one step in.
+            yield new GeneratedValue(
+                array_map(static fn (GeneratedValue $item): mixed => $item->value, $kept),
+                [$shrunkLength, $kept],
+            );
+        }
     }
 }

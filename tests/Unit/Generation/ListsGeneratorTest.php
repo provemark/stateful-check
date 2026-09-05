@@ -57,3 +57,55 @@ it('reaches both of its length bounds across the seeds', function () {
     expect($lengths)->toContain(1)
         ->and($lengths)->toContain(4);
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC6, deletion family — removals take elements from the END, so a candidate is a PREFIX
+ * of the list it came from (D036), none falls below the declared minimum, and the shortest comes
+ * first. Element shrinking is the second family and the next step; until it exists there are no
+ * same-length candidates to order against, so that clause of AC6 is not asserted here.
+ *
+ * `shrinkValuesOf()` is defined in ElementsGeneratorTest.php.
+ */
+it('shrinks a list by removing elements from the end, shortest first', function () {
+    $g = Gen::listsOf(Gen::integers(0, 100), 1, 4);
+
+    // Seed 5 draws [11, 74, 44, 93]. The lengths shrink through the same integers(1, 4) that drew
+    // them — the origin (here the minimum, 1) first, then halving back toward the value — so the
+    // candidates are the one-element and three-element prefixes, in that order.
+    $gv = $g->generate(Source::seeded(5));
+    expect($gv->value)->toBe([11, 74, 44, 93]);
+
+    $candidates = shrinkValuesOf($g, $gv);
+
+    expect(array_slice($candidates, 0, 2))->toBe([[11], [11, 74, 44]]);
+
+    foreach ($candidates as $candidate) {
+        expect($candidate)->toBeArray();
+        if (! is_array($candidate)) {
+            continue;
+        }
+
+        expect(count($candidate))->toBeGreaterThanOrEqual(1)
+            ->and($candidate)->not->toBe([11, 74, 44, 93]);
+
+        if (count($candidate) < 4) {
+            // A prefix is what a reader of a failure report can check by eye, and it matches how
+            // SPEC-002 shrinks a command sequence by holding a prefix.
+            expect($candidate)->toBe(array_slice([11, 74, 44, 93], 0, count($candidate)));
+        }
+    }
+})->group('SPEC-010');
+
+it('gives every candidate a context that permits further shrinking', function () {
+    $g = Gen::listsOf(Gen::integers(0, 100), 1, 4);
+
+    $gv = $g->generate(Source::seeded(5));
+
+    // An item's context is opaque and cannot be reconstructed from the item, so a candidate that
+    // lost its items' contexts would shrink no further — the silent kind of degradation that turns
+    // a counterexample into a worse one with no signal. Shrinking each candidate in turn is what
+    // proves the context survived the deletion.
+    foreach ($g->shrink($gv) as $candidate) {
+        expect(fn () => [...$g->shrink($candidate)])->not->toThrow(Throwable::class);
+    }
+})->group('SPEC-010');
