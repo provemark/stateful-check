@@ -109,3 +109,89 @@ it('gives every candidate a context that permits further shrinking', function ()
         expect(fn () => [...$g->shrink($candidate)])->not->toThrow(Throwable::class);
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC6, element family — same-length candidates that shrink ONE element through the item
+ * generator, offered only after every shorter candidate, and the walk that ends at a list of `min`
+ * elements each at the item generator's origin. Delegation is the point: this class knows nothing
+ * about integers, and an item that shrank by any other route would prove the wiring wrong.
+ */
+it('shrinks elements only after every shorter candidate, delegating to the item generator', function () {
+    $g = Gen::listsOf(Gen::integers(0, 100), 1, 4);
+
+    $gv = $g->generate(Source::seeded(5));
+    $candidates = shrinkValuesOf($g, $gv);
+
+    // Element 0 first, and its values are exactly integers(0, 100) shrinking 11: the origin, then
+    // halving back toward 11. This class contributes the position; the item generator the value.
+    $sameLength = array_values(array_filter(
+        $candidates,
+        static fn (mixed $candidate): bool => is_array($candidate) && count($candidate) === 4,
+    ));
+
+    expect(array_slice($sameLength, 0, 4))->toBe([
+        [0, 74, 44, 93],
+        [6, 74, 44, 93],
+        [9, 74, 44, 93],
+        [10, 74, 44, 93],
+    ]);
+
+    $sameLengthSeen = false;
+
+    foreach ($candidates as $candidate) {
+        expect($candidate)->toBeArray();
+        if (! is_array($candidate)) {
+            continue;
+        }
+
+        if (count($candidate) < 4) {
+            // AC6's ordering clause, testable only now that same-length candidates exist.
+            expect($sameLengthSeen)->toBeFalse();
+
+            continue;
+        }
+
+        $sameLengthSeen = true;
+
+        // One element at a time — the same one-component-at-a-time reduction associative() makes,
+        // and the local minimum R3 documents: a bug needing two elements reduced together is not
+        // found by this family.
+        $differences = 0;
+        foreach ([11, 74, 44, 93] as $position => $original) {
+            if (($candidate[$position] ?? null) !== $original) {
+                $differences++;
+            }
+        }
+
+        expect($differences)->toBe(1);
+    }
+})->group('SPEC-010');
+
+it('terminates at the minimum length with every element at the item generator\'s origin', function () {
+    $g = Gen::listsOf(Gen::integers(0, 100), 1, 4);
+
+    foreach (range(1, 20) as $seed) {
+        $value = $g->generate(Source::seeded($seed));
+
+        $steps = 0;
+        while ($steps < 64) {
+            $next = null;
+            foreach ($g->shrink($value) as $candidate) {
+                $next = $candidate;
+                break;
+            }
+
+            if ($next === null) {
+                break;
+            }
+
+            $value = $next;
+            $steps++;
+        }
+
+        // One element, at integers(0, 100)'s origin. The minimum comes from this generator, the
+        // origin from the item generator — which is exactly the division of labour AC6 requires.
+        expect($steps)->toBeLessThan(64)
+            ->and($value->value)->toBe([0]);
+    }
+})->group('SPEC-010');

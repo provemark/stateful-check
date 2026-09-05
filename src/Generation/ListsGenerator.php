@@ -104,5 +104,32 @@ final class ListsGenerator implements Generator
                 [$shrunkLength, $kept],
             );
         }
+
+        // Element family: same length, ONE element shrunk through the item generator, left to
+        // right. It comes after every shorter candidate because a reader learns far more from "it
+        // fails with any two items" than from four simpler ones, and both fast-check and
+        // Hypothesis order it this way (prior art, 2026-08-19).
+        //
+        // This class contributes the position and nothing else: what an item shrinks to is the
+        // item generator's business, including its origin. That division of labour is what lets a
+        // list of anything be shrunk without this class knowing what it holds. One element at a
+        // time is the same reduction associative() makes, with the same documented local minimum
+        // (R3): a bug needing two elements reduced together is not found by this family.
+        foreach ($items as $position => $item) {
+            foreach ($this->item->shrink($item) as $shrunkItem) {
+                // Rebuilt rather than copied-and-assigned: writing at a variable offset turns the
+                // list into a keyed array as far as static analysis is concerned, and the value
+                // this generator promises is a list. Same result, one honest type.
+                $candidate = [];
+                foreach ($items as $index => $each) {
+                    $candidate[] = $index === $position ? $shrunkItem : $each;
+                }
+
+                yield new GeneratedValue(
+                    array_map(static fn (GeneratedValue $each): mixed => $each->value, $candidate),
+                    [$length, $candidate],
+                );
+            }
+        }
     }
 }
