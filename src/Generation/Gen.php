@@ -43,14 +43,17 @@ final class Gen
      * engine has no opinion about which characters are interesting, and a shipped default would be
      * a promise every recorded seed depends on (D035).
      *
-     * The shrink origin (D032) arrives with AC4, together with the shrink that moves toward it.
+     * $origin is the string shrinking moves toward. It defaults to $minLength repetitions of the
+     * alphabet's first character; an explicit one lets a caller aim the shrink at a meaningful
+     * value, such as a JSON Schema `default` (D032). Its characters must come from the alphabet
+     * (D040), so every candidate stays a value this generator could itself have produced.
      *
-     * @param  list<string>  $alphabet  single characters; shrinks toward the first
+     * @param  list<string>  $alphabet  single characters; shrinks toward the origin's characters
      * @return Generator<string>
      */
-    public static function strings(int $minLength, int $maxLength, array $alphabet): Generator
+    public static function strings(int $minLength, int $maxLength, array $alphabet, ?string $origin = null): Generator
     {
-        return new StringsGenerator($minLength, $maxLength, $alphabet);
+        return new StringsGenerator($minLength, $maxLength, $alphabet, $origin);
     }
 
     /**

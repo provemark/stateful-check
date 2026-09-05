@@ -217,3 +217,78 @@ it('terminates at minLength repetitions of the first character when the first ca
             ->and($value->value)->toBe('aaa');
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC4, explicit origin (D032) — a caller may aim the shrink at a meaningful string, such
+ * as a JSON Schema `default`. D040 requires its characters to come from the alphabet, so every
+ * candidate stays a value the generator could itself have produced.
+ */
+it('shrinks to an explicit origin when the value is at least as long as it', function () {
+    $g = Gen::strings(3, 6, ['a', 'b', 'c', 'd', 'm', 'i', 'n'], origin: 'admin');
+
+    $value = $g->generate(Source::seeded(5));
+    expect($value->value)->toBe('icdnbb');
+
+    $lengths = [];
+    $steps = 0;
+    while ($steps < 32) {
+        $next = null;
+        foreach ($g->shrink($value) as $candidate) {
+            expect($candidate->value)->toBeString();
+            if (is_string($candidate->value)) {
+                $lengths[] = count(charactersOf($candidate->value));
+            }
+            $next = $next ?? $candidate;
+        }
+
+        if ($next === null) {
+            break;
+        }
+
+        $value = $next;
+        $steps++;
+    }
+
+    expect($steps)->toBeLessThan(32)
+        ->and($value->value)->toBe('admin');
+
+    // The deletion family's floor is the origin's length (five), not minLength (three): a shorter
+    // candidate could never reach the origin again, since shrinking does not grow a value.
+    foreach ($lengths as $length) {
+        expect($length)->toBeGreaterThanOrEqual(5);
+    }
+})->group('SPEC-010');
+
+it('never grows a value shorter than the origin, ending at the origin\'s prefix', function () {
+    $g = Gen::strings(3, 6, ['a', 'b', 'c', 'd', 'm', 'i', 'n'], origin: 'admin');
+
+    $value = $g->generate(Source::seeded(2));
+    expect($value->value)->toBe('dmc');
+
+    $steps = 0;
+    while ($steps < 32) {
+        $next = null;
+        foreach ($g->shrink($value) as $candidate) {
+            expect($candidate->value)->toBeString();
+            if (is_string($candidate->value) && is_string($value->value)) {
+                // Growing is not a reduction. A candidate longer than the value it came from would
+                // also break the greedy loop's assumption that each step gets smaller.
+                expect(count(charactersOf($candidate->value)))
+                    ->toBeLessThanOrEqual(count(charactersOf($value->value)));
+            }
+            $next = $next ?? $candidate;
+        }
+
+        if ($next === null) {
+            break;
+        }
+
+        $value = $next;
+        $steps++;
+    }
+
+    // Three characters cannot become 'admin', so the walk ends at the origin's three-character
+    // prefix — the terminus the amended AC4 records rather than leaving to be found as a bug.
+    expect($steps)->toBeLessThan(32)
+        ->and($value->value)->toBe('adm');
+})->group('SPEC-010');

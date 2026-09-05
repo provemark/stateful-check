@@ -32,16 +32,35 @@ final class StringsGenerator implements Generator
 
     private readonly IntegersGenerator $index;
 
+    /** @var list<string> */
+    private readonly array $originCharacters;
+
     /**
-     * @param  list<string>  $alphabet  single characters; shrinks toward the first (AC4)
+     * @param  list<string>  $alphabet  single characters
+     * @param  string|null  $origin  the string shrinking moves toward; defaults to $minLength
+     *                               repetitions of the alphabet's first character (D032)
      */
-    public function __construct(int $minLength, int $maxLength, array $alphabet)
+    public function __construct(int $minLength, int $maxLength, array $alphabet, ?string $origin = null)
     {
-        // Rejecting a bad length range, an empty alphabet, a multi-character entry and invalid
-        // UTF-8 is AC10's error path, not yet built.
+        // Rejecting a bad length range, an empty alphabet, a multi-character entry, invalid UTF-8
+        // and an origin outside the bounds or the alphabet is AC10's error path, not yet built.
         $this->alphabet = $alphabet;
-        $this->length = new IntegersGenerator($minLength, $maxLength);
         $this->index = new IntegersGenerator(0, count($alphabet) - 1);
+
+        $characters = $origin === null ? [] : preg_split('//u', $origin, -1, PREG_SPLIT_NO_EMPTY);
+        $this->originCharacters = $origin === null || $characters === false
+            ? array_fill(0, $minLength, $alphabet[0] ?? '')
+            : $characters;
+
+        // The deletion family's floor. With the default origin it equals $minLength, which is what
+        // the implicit origin of integers() already gave, so no existing behaviour moves; with a
+        // longer explicit origin it rises, because a candidate below the origin's length could
+        // never reach the origin again — shrinking does not grow a value (AC4).
+        $this->length = new IntegersGenerator(
+            $minLength,
+            $maxLength,
+            max($minLength, count($this->originCharacters)),
+        );
     }
 
     /**
@@ -93,7 +112,18 @@ final class StringsGenerator implements Generator
         // and a prefix is chosen deliberately: it is the version a reader of a failure report can
         // check by eye, and it matches how SPEC-002 shrinks a command sequence by holding a prefix.
         // Character simplification is the second family and arrives in the next step.
+        $currentLength = count($characters);
+
         foreach ($this->length->shrink(new GeneratedValue($context->value)) as $shrunkLength) {
+            // The length shrinks toward the origin's length, which sits ABOVE the value's own
+            // length whenever a value shorter than a long explicit origin was drawn — D032 permits
+            // such an origin, so this is reachable, not defensive. Those candidates would grow the
+            // value, which is no reduction at all, so they are skipped and the deletion family is
+            // simply empty for such a value.
+            if ($shrunkLength->value >= $currentLength) {
+                continue;
+            }
+
             yield new GeneratedValue(
                 implode('', array_slice($characters, 0, $shrunkLength->value)),
                 $shrunkLength,
@@ -120,7 +150,22 @@ final class StringsGenerator implements Generator
                 ));
             }
 
-            foreach ($this->index->shrink(new GeneratedValue($index)) as $shrunkIndex) {
+            // Each position aims at the origin's character in that position. Beyond the origin's
+            // end there is no corresponding character and the alphabet's first is used instead —
+            // those positions are removed by the deletion family anyway. With the default origin
+            // every target is the alphabet's first character, so this is one rule, not two.
+            $target = $this->originCharacters[$position] ?? $this->alphabet[0];
+            $targetIndex = array_search($target, $this->alphabet, true);
+            if (! is_int($targetIndex)) {
+                throw new LogicException(sprintf(
+                    'StringsGenerator::shrink(): origin character %s is not in the alphabet (AC10 will reject this at construction).',
+                    $target,
+                ));
+            }
+
+            $toward = new IntegersGenerator(0, count($this->alphabet) - 1, $targetIndex);
+
+            foreach ($toward->shrink(new GeneratedValue($index)) as $shrunkIndex) {
                 $simplified = $characters;
                 $simplified[$position] = $this->alphabet[$shrunkIndex->value];
 
