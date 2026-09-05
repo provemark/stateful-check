@@ -57,6 +57,18 @@ final class Gen
     }
 
     /**
+     * A bounded sequence of values from an item generator (SPEC-010 AC5) — the same shape as
+     * strings(), whose characters are its items.
+     *
+     * @param  Generator<mixed>  $item
+     * @return Generator<list<mixed>>
+     */
+    public static function listsOf(Generator $item, int $min, int $max): Generator
+    {
+        return new ListsGenerator($item, $min, $max);
+    }
+
+    /**
      * A generator of one fixed value, with no shrinking.
      *
      * @template T
