@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Provemark\StatefulCheck\Generation;
 
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -40,9 +41,59 @@ final class FloatsGenerator implements Generator
         private readonly float $max,
         ?float $origin = null,
     ) {
-        // D015: an implicit (null) origin clamps into the range with no fuss. Rejecting an explicit
-        // one outside it, and the range checks themselves, are AC10's error path — not yet built.
-        $this->origin = $origin ?? max($min, min($max, 0.0));
+        // Every check is at CONSTRUCTION, never at generation: a seeded run that fails halfway
+        // through blames the seed for what is the caller's mistake (AC10).
+        if (! is_finite($min) || ! is_finite($max)) {
+            throw new InvalidArgumentException(
+                sprintf('floats(): bounds must be finite, got [%s, %s].', self::describe($min), self::describe($max)),
+            );
+        }
+
+        if ($max < $min) {
+            throw new InvalidArgumentException(
+                sprintf('floats(): max (%s) is below min (%s).', self::describe($max), self::describe($min)),
+            );
+        }
+
+        // D016 in its float form. Checked as a width rather than by comparing bounds, because a
+        // range can be finite at both ends and still have no representable width — and every value
+        // drawn from it would then be INF or NAN, which AC2 forbids outright.
+        if (! is_finite($max - $min)) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'floats(): range width [%s, %s] is not representable; bound the range.',
+                    self::describe($min),
+                    self::describe($max),
+                ),
+            );
+        }
+
+        // D015: an implicit (null) origin clamps into the range with no fuss; an explicit one
+        // outside it is a caller error and throws.
+        if ($origin === null) {
+            $this->origin = max($min, min($max, 0.0));
+        } elseif (! is_finite($origin) || $origin < $min || $origin > $max) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'floats(): explicit origin (%s) is outside [%s, %s].',
+                    self::describe($origin),
+                    self::describe($min),
+                    self::describe($max),
+                ),
+            );
+        } else {
+            $this->origin = $origin;
+        }
+    }
+
+    /**
+     * NAN and INF cannot be cast to string without a warning, and a message about a bad bound is
+     * exactly where they turn up. Finite values render as they always did, so only the case that
+     * needed handling is handled.
+     */
+    private static function describe(float $value): string
+    {
+        return is_finite($value) ? (string) $value : var_export($value, true);
     }
 
     /**

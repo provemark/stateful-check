@@ -133,3 +133,30 @@ it('terminates when the first candidate is followed repeatedly', function () {
             ->and($value)->toBe(0.0);
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC10 (floats) — invalid arguments throw at CONSTRUCTION, never at generation, where a
+ * seeded run would fail halfway through and the seed would be blamed for the caller's mistake.
+ * D015: an implicit origin is clamped into the range, an explicit one outside it throws.
+ */
+it('rejects an inverted range, a non-finite bound and an out-of-range explicit origin', function () {
+    expect(fn () => Gen::floats(1.0, 0.0))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::floats(NAN, 1.0))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::floats(0.0, INF))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::floats(0.0, 1.0, origin: 5.0))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::floats(0.0, 1.0, origin: NAN))->toThrow(InvalidArgumentException::class);
+
+    // D016 in its float form: a range whose width is not representable. Every value drawn from it
+    // would be INF or NAN, which AC2 forbids — so the guard belongs at construction with the rest.
+    expect(fn () => Gen::floats(-PHP_FLOAT_MAX, PHP_FLOAT_MAX))->toThrow(InvalidArgumentException::class);
+})->group('SPEC-010');
+
+it('names the offending argument and its value in the message', function () {
+    // A message that says only "invalid argument" sends the reader back to the source to find out
+    // which one. Both the name and the value are in it, so the mistake is legible from the failure
+    // alone — the same standard integers() already set.
+    expect(fn () => Gen::floats(1.0, 0.0))
+        ->toThrow(InvalidArgumentException::class, 'floats(): max (0) is below min (1).')
+        ->and(fn () => Gen::floats(0.0, 1.0, origin: 5.0))
+        ->toThrow(InvalidArgumentException::class, 'floats(): explicit origin (5) is outside [0, 1].');
+})->group('SPEC-010');
