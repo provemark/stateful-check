@@ -26,6 +26,18 @@ final class Gen
     }
 
     /**
+     * A bounded float generator that shrinks toward an origin (SPEC-010 AC2). The origin is offered
+     * first and the remaining distance is then halved back toward the value, as integers() does;
+     * an implicit origin clamps into the range (D015).
+     *
+     * @return Generator<float>
+     */
+    public static function floats(float $min, float $max, ?float $origin = null): Generator
+    {
+        return new FloatsGenerator($min, $max, $origin);
+    }
+
+    /**
      * A generator of one fixed value, with no shrinking.
      *
      * @template T
