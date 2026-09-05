@@ -74,3 +74,50 @@ it('an empty record generates [] and does not shrink', function () {
     expect($g->generate(Source::seeded(1))->value)->toBe([])
         ->and([...$g->shrink(new GeneratedValue([], []))])->toBe([]);
 })->group('SPEC-003');
+
+/**
+ * SPEC-010 AC7 — keys that may be absent are a second parameter on associative(), not a new
+ * record() combinator (D037): it adds no new concept, leaves every existing call untouched, and
+ * keeps "a keyed record" one thing in the user's head. Shrinking an optional key to absent is AC8.
+ */
+it('always produces its required keys and sometimes its optional ones', function () {
+    $g = Gen::associative(['a' => Gen::integers(0, 9)], optional: ['b' => Gen::integers(0, 9)]);
+
+    $present = [];
+    foreach (range(1, 40) as $seed) {
+        $value = $g->generate(Source::seeded($seed))->value;
+
+        expect($value)->toBeArray();
+        if (! is_array($value)) {
+            continue;
+        }
+
+        // A required key is not optional in disguise: it is in every single value.
+        expect($value)->toHaveKey('a');
+
+        $present[] = array_key_exists('b', $value);
+    }
+
+    // Both shapes must occur, or the parameter generates nothing new: a key that is always there
+    // is a required key, and one that never is could have been left out of the record.
+    expect($present)->toContain(true)
+        ->and($present)->toContain(false);
+})->group('SPEC-010');
+
+it('produces its keys in a deterministic order for a given seed', function () {
+    $g = Gen::associative(['a' => Gen::integers(0, 9)], optional: ['b' => Gen::integers(0, 9)]);
+
+    foreach (range(1, 40) as $seed) {
+        $first = $g->generate(Source::seeded($seed))->value;
+        $second = $g->generate(Source::seeded($seed))->value;
+
+        // Identical values AND identical key order (=== compares order for arrays), in this
+        // process and any other: nothing here may depend on hash order, spl_object_id or the
+        // clock (R4). Required keys come first, in declaration order, then the optional ones.
+        expect($second)->toBe($first);
+
+        if (is_array($first)) {
+            expect(array_keys($first))->toBe(array_key_exists('b', $first) ? ['a', 'b'] : ['a']);
+        }
+    }
+})->group('SPEC-010');

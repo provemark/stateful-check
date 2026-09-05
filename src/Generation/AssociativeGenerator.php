@@ -19,14 +19,29 @@ use LogicException;
  * are `Generator<mixed>`; because `Generator` is covariant (D017), a caller may pass a
  * heterogeneous set of concrete generators here.
  *
+ * Keys may also be OPTIONAL — present in some values, absent in others (SPEC-010 AC7). They are a
+ * second parameter rather than a separate `record()` combinator (D037): it adds no new concept and
+ * leaves every existing call untouched. Presence is drawn per key by an internal integers(0, 1)
+ * whose origin is 0, so absence is where shrinking aims (AC8), the same way elements() aims at
+ * index 0.
+ *
  * @implements Generator<array<array-key, mixed>>
  */
 final class AssociativeGenerator implements Generator
 {
+    private readonly IntegersGenerator $presence;
+
     /**
-     * @param  array<array-key, Generator<mixed>>  $generators
+     * @param  array<array-key, Generator<mixed>>  $generators  always present
+     * @param  array<array-key, Generator<mixed>>  $optional  sometimes present
      */
-    public function __construct(private readonly array $generators) {}
+    public function __construct(
+        private readonly array $generators,
+        private readonly array $optional = [],
+    ) {
+        // Rejecting a key that is both required and optional is AC10's error path, not yet built.
+        $this->presence = new IntegersGenerator(0, 1);
+    }
 
     /**
      * @return GeneratedValue<array<array-key, mixed>>
@@ -40,6 +55,23 @@ final class AssociativeGenerator implements Generator
             $component = $generator->generate($source);
             $values[$key] = $component->value;
             $context[$key] = $component;
+        }
+
+        // Optional keys come after the required ones, in declaration order, so the key order of
+        // the produced record is a function of the declaration and the draw — never of hash order
+        // or anything else that varies between processes (R4).
+        foreach ($this->optional as $key => $generator) {
+            $present = $this->presence->generate($source);
+            $component = $present->value === 1 ? $generator->generate($source) : null;
+
+            if ($component !== null) {
+                $values[$key] = $component->value;
+            }
+
+            // The context records the presence draw for every optional key, present or not, so
+            // shrinking can tell "absent" from "never asked" — and carries the component beside it
+            // so an absent key costs nothing and a present one stays shrinkable (AC8).
+            $context[$key] = [$present, $component];
         }
 
         return new GeneratedValue($values, $context);

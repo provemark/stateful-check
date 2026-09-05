@@ -114,12 +114,17 @@ final class Gen
      * A generator of a keyed record; shrinking reduces one component at a time, in
      * array order. The generators may be heterogeneous (Generator is covariant, D017).
      *
-     * @param  array<array-key, Generator<mixed>>  $generators
+     * Keys in $optional are present in some values and absent in others, and shrink to absent
+     * before their value is shrunk (SPEC-010 AC7/AC8). A parameter rather than a second
+     * combinator, so "a keyed record" stays one thing (D037).
+     *
+     * @param  array<array-key, Generator<mixed>>  $generators  always present
+     * @param  array<array-key, Generator<mixed>>  $optional  sometimes present
      * @return Generator<array<array-key, mixed>>
      */
-    public static function associative(array $generators): Generator
+    public static function associative(array $generators, array $optional = []): Generator
     {
-        return new AssociativeGenerator($generators);
+        return new AssociativeGenerator($generators, $optional);
     }
 
     /**
