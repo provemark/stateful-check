@@ -252,11 +252,21 @@ finite, and it never yields the value it was given.
     moves each position toward the corresponding character of the origin, and
     following the first candidate repeatedly terminates at the origin itself: a
     string of length `minLength` consisting of `'a'`.
-  - And given the same bounds over an alphabet that also contains `'d'`, `'m'`,
-    `'i'` and `'n'`, constructed with an explicit `origin: 'admin'`, following
-    the first candidate repeatedly terminates at `'admin'` instead — the
-    shortening-first ordering unchanged, and the deletion family bounded below
-    by the origin's length (five) rather than by `minLength`.
+  - And given a generated string **at least as long as the origin**, over an
+    alphabet that also contains `'d'`, `'m'`, `'i'` and `'n'`, constructed with
+    an explicit `origin: 'admin'`, following the first candidate repeatedly
+    terminates at `'admin'` instead — the shortening-first ordering unchanged,
+    and the deletion family bounded below by the origin's length (five) rather
+    than by `minLength`.
+  - *A string shorter than the origin can be drawn whenever the origin is longer
+    than `minLength`, which D032 permits: the consumer aims at a schema's
+    `default`, whose length is not tied to `minLength`. Such a value terminates
+    at the origin's prefix of its own length — `'bcab'` at `minLength` 3 shrinks
+    to `'admi'`, not to `'admin'` — because shrinking never grows a value, and a
+    candidate longer than the value it came from would not be a reduction at
+    all. The Given above is therefore a length condition and not a formality;
+    without it the criterion would promise a terminus no implementation can
+    reach.*
   - *The lower bound on deletion is `max(minLength, origin length)`, and the two
     clauses above are one rule stated twice: with the default origin the two are
     equal, which is why the first reads as `minLength` and as the alphabet's
