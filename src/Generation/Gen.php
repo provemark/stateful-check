@@ -69,6 +69,18 @@ final class Gen
     }
 
     /**
+     * A bounded list of DISTINCT members of a fixed choice set (SPEC-010 AC9). Not a general
+     * uniqueness combinator: the choices must be finite and enumerable (D034).
+     *
+     * @param  list<mixed>  $choices
+     * @return Generator<list<mixed>>
+     */
+    public static function subsetOf(array $choices, int $min, int $max): Generator
+    {
+        return new SubsetGenerator($choices, $min, $max);
+    }
+
+    /**
      * A generator of one fixed value, with no shrinking.
      *
      * @template T
