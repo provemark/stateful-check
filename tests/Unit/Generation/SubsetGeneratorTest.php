@@ -44,3 +44,77 @@ it('draws distinct choices within its size bounds, reaching both', function () {
     expect($sizes)->toContain(1)
         ->and($sizes)->toContain(3);
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC9, shrinking — removals first, then the remaining choices move toward earlier ones,
+ * never below the minimum size and never producing a duplicate at any point in the sequence.
+ *
+ * `shrinkValuesOf()` is defined in ElementsGeneratorTest.php.
+ */
+it('removes before moving choices earlier, and never falls below the minimum', function () {
+    $g = Gen::subsetOf(['a', 'b', 'c'], 1, 3);
+
+    // Seed 1 draws ['c', 'b'] — indices [2, 1]. The size shrinks through integers(1, 3) to 1, so
+    // the prefix comes first; then position 0 moves from 'c' to 'a' (index 2 toward 0) and
+    // position 1 from 'b' to 'a'. Moving position 0 to 'b' is skipped: 'b' is already there.
+    $gv = $g->generate(Source::seeded(1));
+    expect($gv->value)->toBe(['c', 'b']);
+
+    expect(shrinkValuesOf($g, $gv))->toBe([
+        ['c'],
+        ['a', 'b'],
+        ['c', 'a'],
+    ]);
+})->group('SPEC-010');
+
+it('skips every candidate that would repeat a choice', function () {
+    $g = Gen::subsetOf(['a', 'b', 'c'], 1, 3);
+
+    // Seed 5 draws all three choices, so every earlier index a position could move to is already
+    // taken: the whole simplification family collapses and only the removals remain. Skipping the
+    // colliding candidates is what keeps the promise "never a duplicate at any point" — filtering
+    // them out afterwards would have counted them as offered.
+    $gv = $g->generate(Source::seeded(5));
+    expect($gv->value)->toBe(['a', 'c', 'b']);
+
+    $candidates = shrinkValuesOf($g, $gv);
+
+    expect($candidates)->toBe([['a'], ['a', 'c']]);
+
+    foreach ($candidates as $candidate) {
+        expect($candidate)->toBeArray();
+        if (! is_array($candidate)) {
+            continue;
+        }
+
+        expect(count(array_unique($candidate, SORT_REGULAR)))->toBe(count($candidate))
+            ->and(count($candidate))->toBeGreaterThanOrEqual(1);
+    }
+})->group('SPEC-010');
+
+it('terminates at the minimum size on the first choice', function () {
+    $g = Gen::subsetOf(['a', 'b', 'c'], 1, 3);
+
+    foreach (range(1, 20) as $seed) {
+        $value = $g->generate(Source::seeded($seed));
+
+        $steps = 0;
+        while ($steps < 32) {
+            $next = null;
+            foreach ($g->shrink($value) as $candidate) {
+                $next = $candidate;
+                break;
+            }
+
+            if ($next === null) {
+                break;
+            }
+
+            $value = $next;
+            $steps++;
+        }
+
+        expect($steps)->toBeLessThan(32)
+            ->and($value->value)->toBe(['a']);
+    }
+})->group('SPEC-010');

@@ -30,6 +30,8 @@ final class SubsetGenerator implements Generator
 
     private readonly IntegersGenerator $size;
 
+    private readonly IntegersGenerator $index;
+
     /**
      * @param  list<mixed>  $choices
      */
@@ -39,6 +41,7 @@ final class SubsetGenerator implements Generator
         // is AC10's error path, not yet built.
         $this->choices = $choices;
         $this->size = new IntegersGenerator($min, $max);
+        $this->index = new IntegersGenerator(0, count($choices) - 1);
     }
 
     /**
@@ -59,10 +62,7 @@ final class SubsetGenerator implements Generator
             $indices[] = $pool[$i];
         }
 
-        return new GeneratedValue(
-            array_map(fn (int $index): mixed => $this->choices[$index], $indices),
-            [$size, $indices],
-        );
+        return new GeneratedValue($this->valuesOf($indices), [$size, $indices]);
     }
 
     /**
@@ -71,10 +71,67 @@ final class SubsetGenerator implements Generator
      */
     public function shrink(GeneratedValue $value): iterable
     {
-        // The rest of AC9 is the next step: removals before moving the remaining choices toward
-        // earlier ones, never below the minimum, and never a duplicate at any point in the
-        // sequence. Loud until then, as an empty candidate list would be indistinguishable from
-        // "already minimal" and would leave a counterexample un-shrunk with no signal.
-        throw new LogicException('SubsetGenerator::shrink() arrives with the rest of SPEC-010 AC9.');
+        $context = $value->context;
+        if (
+            ! is_array($context) || ! array_is_list($context) || count($context) !== 2
+            || ! $context[0] instanceof GeneratedValue || ! is_int($context[0]->value)
+            || ! is_array($context[1]) || ! array_is_list($context[1])
+        ) {
+            throw new LogicException(
+                'SubsetGenerator::shrink() expects a [GeneratedValue<int> size, list of int indices] context.',
+            );
+        }
+
+        $size = $context[0];
+
+        $indices = [];
+        foreach ($context[1] as $index) {
+            if (! is_int($index)) {
+                throw new LogicException('SubsetGenerator::shrink() expects every recorded index to be an int.');
+            }
+
+            $indices[] = $index;
+        }
+
+        // Removals first, from the end (D036), through the same integers() that drew the size — so
+        // no candidate falls below the minimum and a candidate is a prefix, as everywhere else here.
+        foreach ($this->size->shrink(new GeneratedValue($size->value)) as $shrunkSize) {
+            $kept = array_slice($indices, 0, $shrunkSize->value);
+
+            yield new GeneratedValue($this->valuesOf($kept), [$shrunkSize, $kept]);
+        }
+
+        // Then the remaining choices move toward earlier ones, one position at a time, delegating
+        // to the same integers(0, count-1) that drew the index — "earlier" is that generator's
+        // origin, not a rule stated twice.
+        foreach ($indices as $position => $index) {
+            foreach ($this->index->shrink(new GeneratedValue($index)) as $shrunkIndex) {
+                $candidate = [];
+                foreach ($indices as $each => $existing) {
+                    $candidate[] = $each === $position ? $shrunkIndex->value : $existing;
+                }
+
+                // A move onto a choice the subset already holds is SKIPPED, not offered and then
+                // filtered: a duplicate must not exist at any point in the sequence, and a
+                // candidate that is dropped afterwards has still been counted as offered. This is
+                // where the finite choice set earns its keep — the collision is decidable here,
+                // which is exactly what a general uniqueItems over an arbitrary item generator
+                // cannot promise (D034).
+                if (count(array_unique($candidate, SORT_REGULAR)) !== count($candidate)) {
+                    continue;
+                }
+
+                yield new GeneratedValue($this->valuesOf($candidate), [$size, $candidate]);
+            }
+        }
+    }
+
+    /**
+     * @param  list<int>  $indices
+     * @return list<mixed>
+     */
+    private function valuesOf(array $indices): array
+    {
+        return array_map(fn (int $index): mixed => $this->choices[$index], $indices);
     }
 }
