@@ -97,7 +97,12 @@ it('shrinks by removing characters from the end, shortest first, never below the
 
     $candidates = shrinkValuesOf($g, $gv);
 
-    expect($candidates)->toBe(['aba', 'abacb']);
+    // The head of the sequence is the deletion family: exactly the length-3 and length-5 prefixes.
+    // What follows are the same-length simplifications, whose contents are the next test's
+    // subject — asserting the whole list here would only duplicate it.
+    expect(array_slice($candidates, 0, 2))->toBe(['aba', 'abacb']);
+
+    $sameLengthSeen = false;
 
     foreach ($candidates as $candidate) {
         expect($candidate)->toBeString();
@@ -105,11 +110,25 @@ it('shrinks by removing characters from the end, shortest first, never below the
             continue;
         }
 
-        // A prefix is what a reader of a failure report can check by eye, and it is the same
-        // mental model SPEC-002 uses when it holds a prefix of a command sequence.
-        expect(str_starts_with('abacbb', $candidate))->toBeTrue()
-            ->and(count(charactersOf($candidate)))->toBeGreaterThanOrEqual(3)
+        $length = count(charactersOf($candidate));
+
+        expect($length)->toBeGreaterThanOrEqual(3)
             ->and($candidate)->not->toBe('abacbb');
+
+        if ($length === 6) {
+            $sameLengthSeen = true;
+
+            continue;
+        }
+
+        // AC4's ordering clause: every shorter candidate comes before every same-length one. It
+        // became testable only once the simplification family existed, so it lands here rather
+        // than in the step that built the deletions.
+        expect($sameLengthSeen)->toBeFalse();
+
+        // A prefix is what a reader of a failure report can check by eye, and it is the same
+        // mental model SPEC-002 uses when it holds a prefix of a command sequence (D036).
+        expect(str_starts_with('abacbb', $candidate))->toBeTrue();
     }
 })->group('SPEC-010');
 
@@ -124,7 +143,9 @@ it('cuts its prefixes on characters, never on bytes', function () {
 
     $candidates = shrinkValuesOf($g, $gv);
 
-    expect($candidates)->toBe(['', 'a😀']);
+    // Again only the deletion head is pinned: the same-length candidates that follow replace one
+    // character rather than cutting any, so they cannot expose a byte-wise cut.
+    expect(array_slice($candidates, 0, 2))->toBe(['', 'a😀']);
 
     foreach ($candidates as $candidate) {
         expect($candidate)->toBeString();
@@ -132,6 +153,67 @@ it('cuts its prefixes on characters, never on bytes', function () {
             continue;
         }
 
+        // No candidate may be malformed UTF-8 — the failure a byte-wise operation would produce.
         expect(preg_match('//u', $candidate))->toBe(1);
+
+        if (count(charactersOf($candidate)) < 3) {
+            expect(str_starts_with('a😀a', $candidate))->toBeTrue();
+        }
+    }
+})->group('SPEC-010');
+
+/**
+ * SPEC-010 AC4, simplification family — same-length candidates that move ONE position toward the
+ * origin's character, offered only after every shorter candidate. With no explicit origin that
+ * character is the alphabet's first, and the walk ends at minLength repetitions of it.
+ *
+ * Shortening first is the whole value of the shrink for a report: a reader learns far more from
+ * "it fails at any 3-character name" than from a 6-character one with simpler letters.
+ */
+it('offers every shorter candidate before any same-length simplification', function () {
+    $g = Gen::strings(3, 6, ['a', 'b', 'c']);
+    $gv = $g->generate(Source::seeded(5));
+
+    // 'abacbb' — the two prefixes first, then one position at a time from the left, each index
+    // shrunk through the same integers(0, 2) that drew it: 'b' (index 1) reduces to 'a', 'c'
+    // (index 2) reduces to 'a' and then to 'b'. Positions already at the first character offer
+    // nothing, which is why positions 0 and 2 are absent.
+    expect(shrinkValuesOf($g, $gv))->toBe([
+        'aba',
+        'abacb',
+        'aaacbb',
+        'abaabb',
+        'ababbb',
+        'abacab',
+        'abacba',
+    ]);
+})->group('SPEC-010');
+
+it('terminates at minLength repetitions of the first character when the first candidate is followed', function () {
+    $g = Gen::strings(3, 6, ['a', 'b', 'c']);
+
+    foreach (range(1, 20) as $seed) {
+        $value = $g->generate(Source::seeded($seed));
+
+        // The greedy loop always takes the first candidate; this is that walk, bounded so a future
+        // ordering change cannot turn shrinking into a long or endless one without failing a test.
+        $steps = 0;
+        while ($steps < 32) {
+            $next = null;
+            foreach ($g->shrink($value) as $candidate) {
+                $next = $candidate;
+                break;
+            }
+
+            if ($next === null) {
+                break;
+            }
+
+            $value = $next;
+            $steps++;
+        }
+
+        expect($steps)->toBeLessThan(32)
+            ->and($value->value)->toBe('aaa');
     }
 })->group('SPEC-010');

@@ -99,5 +99,35 @@ final class StringsGenerator implements Generator
                 $shrunkLength,
             );
         }
+
+        // Simplification family: same length, ONE position moved toward the origin's character,
+        // left to right. It comes after every shorter candidate because that ordering is the whole
+        // value of the shrink for a report — a reader learns far more from "it fails at any
+        // 3-character name" than from a 6-character one with simpler letters — and both fast-check
+        // and Hypothesis order it this way (prior art, 2026-08-19).
+        //
+        // Each position delegates to the same integers(0, count-1) that drew it, exactly as
+        // ElementsGenerator delegates its index, so "toward the alphabet's first character" is the
+        // index generator's origin and not a rule this class states twice.
+        foreach ($characters as $position => $character) {
+            $index = array_search($character, $this->alphabet, true);
+            if (! is_int($index)) {
+                // A character outside the alphabet cannot come from this generator. Loud, like the
+                // context checks above: a silent skip would weaken shrinking with no signal.
+                throw new LogicException(sprintf(
+                    'StringsGenerator::shrink() was handed the character %s, which is not in its alphabet.',
+                    $character,
+                ));
+            }
+
+            foreach ($this->index->shrink(new GeneratedValue($index)) as $shrunkIndex) {
+                $simplified = $characters;
+                $simplified[$position] = $this->alphabet[$shrunkIndex->value];
+
+                // The length is unchanged, so the candidate carries the same length context and
+                // can be shrunk further — by deletion first, then simplification, all over again.
+                yield new GeneratedValue(implode('', $simplified), $context);
+            }
+        }
     }
 }
