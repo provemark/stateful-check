@@ -195,3 +195,17 @@ it('terminates at the minimum length with every element at the item generator\'s
             ->and($value->value)->toBe([0]);
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC10 (lists) — an invalid length range throws at CONSTRUCTION, where the caller can see
+ * it, rather than at generation, where a seeded run would fail halfway through and the seed would
+ * be blamed for the caller's mistake.
+ */
+it('rejects a negative minimum and an inverted length range at construction', function () {
+    $item = Gen::integers(0, 9);
+
+    expect(fn () => Gen::listsOf($item, -1, 3))
+        ->toThrow(InvalidArgumentException::class, 'listsOf(): min (-1) must not be negative.')
+        ->and(fn () => Gen::listsOf($item, 5, 2))
+        ->toThrow(InvalidArgumentException::class, 'listsOf(): max (2) is below min (5).');
+})->group('SPEC-010');

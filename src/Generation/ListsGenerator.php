@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Provemark\StatefulCheck\Generation;
 
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -26,7 +27,17 @@ final class ListsGenerator implements Generator
      */
     public function __construct(private readonly Generator $item, int $min, int $max)
     {
-        // Rejecting a bad length range is AC10's error path, not yet built.
+        // At CONSTRUCTION, never at generation: a seeded run that fails halfway through blames the
+        // seed for what is the caller's mistake (AC10). A negative minimum is checked here rather
+        // than left to integers(), whose message would name a generator the caller never used.
+        if ($min < 0) {
+            throw new InvalidArgumentException("listsOf(): min ($min) must not be negative.");
+        }
+
+        if ($max < $min) {
+            throw new InvalidArgumentException("listsOf(): max ($max) is below min ($min).");
+        }
+
         $this->length = new IntegersGenerator($min, $max);
     }
 
