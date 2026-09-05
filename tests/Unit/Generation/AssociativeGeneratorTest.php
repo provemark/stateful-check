@@ -121,3 +121,85 @@ it('produces its keys in a deterministic order for a given seed', function () {
         }
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC8 — an optional key shrinks to ABSENT before its value is shrunk, a required key is
+ * never dropped, and once the key is absent nothing re-adds it or repeats the same record.
+ *
+ * That last clause is why this is a parameter on the generator rather than an idiom in the caller.
+ * The composed substitute from the spec's necessity audit — map() over a record holding a boolean
+ * flag — generates both shapes and even shrinks toward absence, but once the flag is false every
+ * further shrink of the key's value maps back to the SAME record: candidates equal to the value
+ * they came from, which the Generator contract forbids and on which the greedy loop's termination
+ * rests.
+ */
+it('offers absence before shrinking an optional value, and never drops a required key', function () {
+    $g = Gen::associative(['a' => Gen::integers(0, 9)], optional: ['b' => Gen::integers(0, 9)]);
+
+    $gv = $g->generate(Source::seeded(1));
+    expect($gv->value)->toBe(['a' => 5, 'b' => 4]);
+
+    $candidates = shrinkValuesOf($g, $gv);
+
+    $absentAt = null;
+    $shrunkValueAt = null;
+
+    foreach ($candidates as $position => $candidate) {
+        expect($candidate)->toBeArray();
+        if (! is_array($candidate)) {
+            continue;
+        }
+
+        // A required key is never a candidate for removal, whatever else happens.
+        expect($candidate)->toHaveKey('a');
+
+        if (! array_key_exists('b', $candidate)) {
+            $absentAt ??= $position;
+
+            continue;
+        }
+
+        if ($candidate['b'] !== 4) {
+            $shrunkValueAt ??= $position;
+        }
+    }
+
+    // Absence is the bigger reduction and comes first: a reader learns more from "the key need not
+    // be there at all" than from "the key may hold a smaller value".
+    expect($absentAt)->not->toBeNull()
+        ->and($shrunkValueAt)->not->toBeNull();
+
+    // Narrowed for the analyser after the expectations above have already failed the test if
+    // either family produced nothing — the same idiom the generators use on their contexts.
+    if ($absentAt === null || $shrunkValueAt === null) {
+        return;
+    }
+
+    expect($absentAt)->toBeLessThan($shrunkValueAt);
+})->group('SPEC-010');
+
+it('never re-adds an optional key once it is absent, and never repeats the record', function () {
+    $g = Gen::associative(['a' => Gen::integers(0, 9)], optional: ['b' => Gen::integers(0, 9)]);
+
+    $gv = $g->generate(Source::seeded(1));
+
+    // The first candidate without 'b' — then shrink that, which is what the greedy loop does next.
+    $absent = null;
+    foreach ($g->shrink($gv) as $candidate) {
+        if (is_array($candidate->value) && ! array_key_exists('b', $candidate->value)) {
+            $absent = $candidate;
+            break;
+        }
+    }
+
+    expect($absent)->not->toBeNull();
+    if ($absent === null) {
+        return;
+    }
+
+    foreach ($g->shrink($absent) as $candidate) {
+        expect($candidate->value)->toBeArray()
+            ->and($candidate->value)->not->toHaveKey('b')
+            ->and($candidate->value)->not->toBe($absent->value);
+    }
+})->group('SPEC-010');

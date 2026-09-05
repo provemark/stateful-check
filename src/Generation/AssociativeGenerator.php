@@ -110,5 +110,50 @@ final class AssociativeGenerator implements Generator
                 yield new GeneratedValue($values, $newContext);
             }
         }
+
+        // Optional keys, in declaration order: absence first, then the value (SPEC-010 AC8).
+        foreach ($this->optional as $key => $generator) {
+            $entry = $context[$key] ?? null;
+            if (
+                ! is_array($entry) || ! array_is_list($entry) || count($entry) !== 2
+                || ! $entry[0] instanceof GeneratedValue || ! is_int($entry[0]->value)
+                || ! ($entry[1] === null || $entry[1] instanceof GeneratedValue)
+            ) {
+                throw new LogicException(
+                    "AssociativeGenerator::shrink() expects a [GeneratedValue<int> presence, GeneratedValue|null] context for optional key '$key'.",
+                );
+            }
+
+            [$present, $component] = $entry;
+
+            // Absence is the presence draw shrinking to its own origin, not a special case written
+            // here: integers(0, 1) yields 0 for a present key and NOTHING for an absent one. That
+            // is what makes AC8's hardest clause structural — once the key is gone, this loop has
+            // no candidate to offer, so nothing can re-add it or repeat the record.
+            foreach ($this->presence->shrink(new GeneratedValue($present->value)) as $shrunkPresence) {
+                $values = $record;
+                unset($values[$key]);
+
+                $newContext = $context;
+                $newContext[$key] = [$shrunkPresence, null];
+
+                yield new GeneratedValue($values, $newContext);
+            }
+
+            // Then, and only then, the value itself — the bigger reduction is offered first.
+            if ($component === null) {
+                continue;
+            }
+
+            foreach ($generator->shrink($component) as $shrunkComponent) {
+                $values = $record;
+                $values[$key] = $shrunkComponent->value;
+
+                $newContext = $context;
+                $newContext[$key] = [$present, $shrunkComponent];
+
+                yield new GeneratedValue($values, $newContext);
+            }
+        }
     }
 }
