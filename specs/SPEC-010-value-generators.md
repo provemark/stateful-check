@@ -2,7 +2,7 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | approved                                          |
+| Status     | implemented                                       |
 | Author     | maurice                                           |
 | Approved   | maurice, 2026-08-27                               |
 | Supersedes | — but it amends SPEC-003's out-of-scope list: `oneOf` returns to the user-facing surface, on the terms that list itself sets ("it returns when a real suite needs one, in its own amendment"). `bool`, `filter`, `tuple` and `vector` stay out. |
@@ -645,16 +645,41 @@ least one test; every source file maps back to this spec.
 
 | Acceptance criterion | Test (file :: name / group) | Source (file/symbol) |
 |----------------------|-----------------------------|----------------------|
-| AC1                  | —                           | —                    |
-| AC2                  | —                           | —                    |
-| AC3                  | —                           | —                    |
-| AC4                  | —                           | —                    |
-| AC5                  | —                           | —                    |
-| AC6                  | —                           | —                    |
-| AC7                  | —                           | —                    |
-| AC8                  | —                           | —                    |
-| AC9                  | —                           | —                    |
-| AC10                 | —                           | —                    |
-| AC11                 | —                           | —                    |
-| AC12                 | —                           | —                    |
-| AC13                 | —                           | —                    |
+| AC1 — `oneOf()` records its branch; `alphabet()` unchanged | `tests/Unit/Generation/OneOfGeneratorTest.php` (group `SPEC-010`); `tests/Unit/Generation/AlphabetGeneratorTest.php` (group `SPEC-003`, **unmodified**) | `src/Generation/OneOfGenerator.php`, `src/Generation/AlphabetGenerator.php` (delegation), `Gen::oneOf` |
+| AC2 — `floats()` in range, shrinks to its origin | `tests/Unit/Generation/FloatsGeneratorTest.php` (group `SPEC-010`) | `src/Generation/FloatsGenerator.php`, `Gen::floats` |
+| AC3 — `strings()` respects alphabet and code-point bounds | `tests/Unit/Generation/StringsGeneratorTest.php` (group `SPEC-010`) | `src/Generation/StringsGenerator.php`, `Gen::strings` |
+| AC4 — string shrinking shortens before it simplifies, toward the origin | `tests/Unit/Generation/StringsGeneratorTest.php` (group `SPEC-010`) | `src/Generation/StringsGenerator.php` :: `shrink` |
+| AC5 — `listsOf()` respects its bounds and item generator | `tests/Unit/Generation/ListsGeneratorTest.php` (group `SPEC-010`) | `src/Generation/ListsGenerator.php`, `Gen::listsOf` |
+| AC6 — list shrinking removes before it reduces elements | `tests/Unit/Generation/ListsGeneratorTest.php` (group `SPEC-010`) | `src/Generation/ListsGenerator.php` :: `shrink` |
+| AC7 — optional keys are sometimes present, sometimes absent | `tests/Unit/Generation/AssociativeGeneratorTest.php` (group `SPEC-010`) | `src/Generation/AssociativeGenerator.php`, `Gen::associative` |
+| AC8 — an optional key shrinks to absent; a required one is never dropped | `tests/Unit/Generation/AssociativeGeneratorTest.php` (group `SPEC-010`) | `src/Generation/AssociativeGenerator.php` :: `shrink` |
+| AC9 — `subsetOf()` never repeats a choice | `tests/Unit/Generation/SubsetGeneratorTest.php` (group `SPEC-010`) | `src/Generation/SubsetGenerator.php`, `Gen::subsetOf` |
+| AC10 — invalid construction arguments throw | `FloatsGeneratorTest.php`, `StringsGeneratorTest.php`, `ListsGeneratorTest.php`, `SubsetGeneratorTest.php`, `AssociativeGeneratorTest.php` (group `SPEC-010`) | the five generators' constructors |
+| AC11 — the `Generator` contract holds for every new generator | `tests/Unit/Generation/ValueGeneratorContractTest.php` (group `SPEC-010`) | all six generators :: `shrink` |
+| AC12 — the same seed reproduces values and shrinks | `tests/Unit/Generation/ValueGeneratorDeterminismTest.php` (groups `SPEC-010`, `arch`) | all six generators; `src/Generation/Source.php` |
+| AC13 — planted string- and list-argument bugs shrink to their exact minima | `tests/Meta/ValueArgumentPlantedBugShrinkTest.php` (groups `meta`, `SPEC-010`) | `StringsGenerator`, `ListsGenerator`, `SequenceShrinker` (SPEC-006 argument family) |
+
+### Three-sided check, run at `implemented`
+
+**Every AC has a test:** the table above, thirteen for thirteen.
+
+**Every deliverable has an AC:** the six in-scope items map to AC1 (`oneOf`), AC2
+(`floats`), AC3–AC4 (`strings`), AC5–AC6 (`listsOf`), AC7–AC8 (optional keys) and
+AC9 (`subsetOf`); AC10–AC12 are cross-cutting over all six and AC13 proves they
+reach SPEC-006's argument family. No class was added that no criterion asks for.
+
+**Every scope item has a deliverable:** `floats` → `FloatsGenerator`, `strings` →
+`StringsGenerator`, `listsOf` → `ListsGenerator`, optional keys →
+`AssociativeGenerator`'s second parameter, `subsetOf` → `SubsetGenerator`,
+`oneOf` → `OneOfGenerator` with `AlphabetGenerator` reduced to a delegation whose
+SPEC-003 AC5 tests pass unmodified.
+
+Checked negative as well, since an out-of-scope item that quietly appeared would
+be invisible to the three checks above: no `booleans()`, no regex or
+format-driven strings, no general `uniqueItems`, no `filter`/`tuple`/`vector`, no
+dictionaries with generated keys, and **no `edgeBias` parameter on any of the new
+generators** (D039) — the length draws use `integers()` without it, so no
+recorded seed can move when bias is extended later.
+
+D035 is enforced by the signature rather than by a check: `strings()` has no
+default alphabet to omit.
