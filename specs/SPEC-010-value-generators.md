@@ -2,9 +2,9 @@
 
 | Field      | Value                                             |
 |------------|---------------------------------------------------|
-| Status     | draft                                             |
-| Author     | Maurice van Loon                                  |
-| Approved   | — while draft                                     |
+| Status     | approved                                          |
+| Author     | maurice                                           |
+| Approved   | maurice, 2026-08-27                               |
 | Supersedes | — but it amends SPEC-003's out-of-scope list: `oneOf` returns to the user-facing surface, on the terms that list itself sets ("it returns when a real suite needs one, in its own amendment"). `bool`, `filter`, `tuple` and `vector` stay out. |
 
 > Lifecycle: `draft` → maintainer approves → `approved` → tests-first →
@@ -229,17 +229,30 @@ finite, and it never yields the value it was given.
 
 - **AC4 — string shrinking shortens before it simplifies**
   - Given a generated string of length *n* > `minLength` over an alphabet whose
-    first character is `'a'`
+    first character is `'a'`, and no explicit origin — so the origin is
+    `minLength` repetitions of `'a'`
   - When it is shrunk
   - Then shorter strings are offered before same-length simplifications, no
-    candidate is shorter than `minLength`, character simplification moves
-    toward the alphabet's first character, and following the first candidate
-    repeatedly terminates at a string of length `minLength` consisting of that
-    character.
-  - And given the same generator constructed with an explicit
-    `origin: 'admin'`, following the first candidate repeatedly terminates at
-    `'admin'` instead — the length bound and the shortening-first ordering
-    unchanged. *This is the criterion the necessity audit cited when it
+    candidate is shorter than the origin's length, character simplification
+    moves each position toward the corresponding character of the origin, and
+    following the first candidate repeatedly terminates at the origin itself: a
+    string of length `minLength` consisting of `'a'`.
+  - And given the same bounds over an alphabet that also contains `'d'`, `'m'`,
+    `'i'` and `'n'`, constructed with an explicit `origin: 'admin'`, following
+    the first candidate repeatedly terminates at `'admin'` instead — the
+    shortening-first ordering unchanged, and the deletion family bounded below
+    by the origin's length (five) rather than by `minLength`.
+  - *The lower bound on deletion is `max(minLength, origin length)`, and the two
+    clauses above are one rule stated twice: with the default origin the two are
+    equal, which is why the first reads as `minLength` and as the alphabet's
+    first character. They had to be separated because an explicit origin longer
+    than `minLength` is unreachable for a family that keeps deleting down to
+    `minLength`, and because simplification must aim at the origin's characters
+    rather than at `alphabet[0]` — D040's rule that an explicit origin is drawn
+    from the alphabet is precisely what makes aiming there reachable. The second
+    case's alphabet must therefore contain the origin's characters, or
+    construction throws (AC10).*
+  - *This is the criterion the necessity audit cited when it
     admitted `strings()`: a consumer deriving from JSON Schema aims the shrink
     at the schema's `default`, because the server author's own statement of
     the ordinary case is what a minimal reproducer wants to show
