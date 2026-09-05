@@ -76,3 +76,62 @@ it('reaches both of its length bounds across the seeds', function () {
             ->and($lengths)->toContain($max);
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC4, deletion family — shortening comes first, a candidate is a PREFIX of the value it
+ * came from (D036, a deliberate divergence from fast-check, which keeps the suffix), and no
+ * candidate falls below the length bound. Character simplification is the next step; until it
+ * exists there are no same-length candidates to order against, so that clause of AC4 is not
+ * asserted here.
+ *
+ * `shrinkValuesOf()` is defined in ElementsGeneratorTest.php.
+ */
+it('shrinks by removing characters from the end, shortest first, never below the minimum', function () {
+    $g = Gen::strings(3, 6, ['a', 'b', 'c']);
+
+    // Seed 5 draws 'abacbb', the maximum length. The lengths shrink through the same
+    // integers(3, 6) model the length was drawn with — the origin first, then halving back toward
+    // the value — so the candidates are the length-3 and length-5 prefixes, in that order.
+    $gv = $g->generate(Source::seeded(5));
+    expect($gv->value)->toBe('abacbb');
+
+    $candidates = shrinkValuesOf($g, $gv);
+
+    expect($candidates)->toBe(['aba', 'abacb']);
+
+    foreach ($candidates as $candidate) {
+        expect($candidate)->toBeString();
+        if (! is_string($candidate)) {
+            continue;
+        }
+
+        // A prefix is what a reader of a failure report can check by eye, and it is the same
+        // mental model SPEC-002 uses when it holds a prefix of a command sequence.
+        expect(str_starts_with('abacbb', $candidate))->toBeTrue()
+            ->and(count(charactersOf($candidate)))->toBeGreaterThanOrEqual(3)
+            ->and($candidate)->not->toBe('abacbb');
+    }
+})->group('SPEC-010');
+
+it('cuts its prefixes on characters, never on bytes', function () {
+    $g = Gen::strings(0, 4, ['a', 'é', '😀']);
+
+    // Seed 2 draws 'a😀a': three characters, six bytes. A byte-wise prefix of length two would cut
+    // the astral character in half and produce a string that is not valid UTF-8 — a value this
+    // generator can never legitimately produce, and the exact failure D031 is about.
+    $gv = $g->generate(Source::seeded(2));
+    expect($gv->value)->toBe('a😀a');
+
+    $candidates = shrinkValuesOf($g, $gv);
+
+    expect($candidates)->toBe(['', 'a😀']);
+
+    foreach ($candidates as $candidate) {
+        expect($candidate)->toBeString();
+        if (! is_string($candidate)) {
+            continue;
+        }
+
+        expect(preg_match('//u', $candidate))->toBe(1);
+    }
+})->group('SPEC-010');
