@@ -118,3 +118,20 @@ it('terminates at the minimum size on the first choice', function () {
             ->and($value->value)->toBe(['a']);
     }
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC10 (subsets) — invalid arguments throw at CONSTRUCTION. The interesting case is a
+ * minimum larger than the choice set: it is not malformed, it is UNSATISFIABLE, because there are
+ * not that many distinct choices to draw. Left unchecked it would fail during generation, where
+ * the seed would be blamed for a mistake the caller made.
+ */
+it('rejects an empty choice set, an inverted range and an unsatisfiable minimum', function () {
+    expect(fn () => Gen::subsetOf([], 0, 1))
+        ->toThrow(InvalidArgumentException::class, 'subsetOf(): choices must not be empty.')
+        ->and(fn () => Gen::subsetOf(['a', 'b'], 2, 1))
+        ->toThrow(InvalidArgumentException::class, 'subsetOf(): max (1) is below min (2).')
+        ->and(fn () => Gen::subsetOf(['a'], 2, 3))
+        ->toThrow(InvalidArgumentException::class, 'subsetOf(): min (2) exceeds the 1 available choices.')
+        ->and(fn () => Gen::subsetOf(['a', 'b'], -1, 1))
+        ->toThrow(InvalidArgumentException::class, 'subsetOf(): min (-1) must not be negative.');
+})->group('SPEC-010');

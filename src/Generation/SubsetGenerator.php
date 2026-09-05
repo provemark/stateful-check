@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Provemark\StatefulCheck\Generation;
 
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -37,8 +38,31 @@ final class SubsetGenerator implements Generator
      */
     public function __construct(array $choices, int $min, int $max)
     {
-        // Rejecting an empty choice set, a bad size range and a minimum larger than the choice set
-        // is AC10's error path, not yet built.
+        // At CONSTRUCTION, never at generation (AC10).
+        if ($choices === []) {
+            throw new InvalidArgumentException('subsetOf(): choices must not be empty.');
+        }
+
+        if ($min < 0) {
+            throw new InvalidArgumentException("subsetOf(): min ($min) must not be negative.");
+        }
+
+        if ($max < $min) {
+            throw new InvalidArgumentException("subsetOf(): max ($max) is below min ($min).");
+        }
+
+        // Not malformed but UNSATISFIABLE: distinctness is constructed, not filtered, so there is
+        // no way to draw more distinct members than the set holds. Left unchecked this would fail
+        // during generation, where the seed would be blamed for the caller's mistake. The maximum
+        // needs no such check — it is an upper bound, and a draw simply never reaches it.
+        if ($min > count($choices)) {
+            throw new InvalidArgumentException(sprintf(
+                'subsetOf(): min (%d) exceeds the %d available choices.',
+                $min,
+                count($choices),
+            ));
+        }
+
         $this->choices = $choices;
         $this->size = new IntegersGenerator($min, $max);
         $this->index = new IntegersGenerator(0, count($choices) - 1);
