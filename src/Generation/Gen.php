@@ -38,6 +38,22 @@ final class Gen
     }
 
     /**
+     * A string of $minLength..$maxLength characters drawn from $alphabet (SPEC-010 AC3). Lengths
+     * are counted in characters (code points), not bytes (D031). The alphabet is required: the
+     * engine has no opinion about which characters are interesting, and a shipped default would be
+     * a promise every recorded seed depends on (D035).
+     *
+     * The shrink origin (D032) arrives with AC4, together with the shrink that moves toward it.
+     *
+     * @param  list<string>  $alphabet  single characters; shrinks toward the first
+     * @return Generator<string>
+     */
+    public static function strings(int $minLength, int $maxLength, array $alphabet): Generator
+    {
+        return new StringsGenerator($minLength, $maxLength, $alphabet);
+    }
+
+    /**
      * A generator of one fixed value, with no shrinking.
      *
      * @template T
