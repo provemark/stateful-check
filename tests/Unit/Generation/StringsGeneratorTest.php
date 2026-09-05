@@ -292,3 +292,40 @@ it('never grows a value shorter than the origin, ending at the origin\'s prefix'
     expect($steps)->toBeLessThan(32)
         ->and($value->value)->toBe('adm');
 })->group('SPEC-010');
+
+/**
+ * SPEC-010 AC10 (strings) — every invalid argument throws at CONSTRUCTION, never at generation.
+ *
+ * The UTF-8 case is not hypothetical: the named consumer derives its alphabet and its origin from
+ * a schema published by the server under test, which it treats as untrusted input by policy. Under
+ * D031 the character operations are preg_* with /u, and those return false on malformed UTF-8
+ * rather than raising — so without this check a broken schema would yield a generator that
+ * silently produces nothing instead of a named error.
+ */
+it('rejects invalid lengths, alphabets and origins at construction', function () {
+    expect(fn () => Gen::strings(-1, 4, ['a']))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::strings(5, 2, ['a']))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::strings(1, 2, []))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::strings(1, 2, ['ab']))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::strings(1, 2, ['']))->toThrow(InvalidArgumentException::class);
+
+    // D032: an explicit origin must lie within the length bounds. D040: its characters must come
+    // from the alphabet, so that every shrink candidate stays a value this generator could itself
+    // have produced.
+    expect(fn () => Gen::strings(3, 6, ['a', 'b'], origin: 'ab'))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::strings(0, 2, ['a', 'b'], origin: 'aaab'))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Gen::strings(0, 6, ['a', 'b'], origin: 'admin'))->toThrow(InvalidArgumentException::class);
+})->group('SPEC-010');
+
+it('distinguishes invalid UTF-8 from more than one character', function () {
+    // "\xC3" is the lead byte of a two-byte sequence with nothing after it: not valid UTF-8, and
+    // also not "two characters". Reporting it as a length problem would send the reader looking
+    // for a second character that does not exist.
+    expect(fn () => Gen::strings(1, 2, ["\xC3"]))
+        ->toThrow(InvalidArgumentException::class, 'valid UTF-8')
+        ->and(fn () => Gen::strings(1, 2, ['ab']))
+        ->toThrow(InvalidArgumentException::class, 'single character');
+
+    expect(fn () => Gen::strings(0, 2, ['a'], origin: "\xC3"))
+        ->toThrow(InvalidArgumentException::class, 'valid UTF-8');
+})->group('SPEC-010');

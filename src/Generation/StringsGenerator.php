@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Provemark\StatefulCheck\Generation;
 
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -42,15 +43,60 @@ final class StringsGenerator implements Generator
      */
     public function __construct(int $minLength, int $maxLength, array $alphabet, ?string $origin = null)
     {
-        // Rejecting a bad length range, an empty alphabet, a multi-character entry, invalid UTF-8
-        // and an origin outside the bounds or the alphabet is AC10's error path, not yet built.
+        // Everything below is checked at CONSTRUCTION, never at generation, where a seeded run
+        // would fail halfway through and the seed would be blamed for the caller's mistake (AC10).
+        if ($minLength < 0) {
+            throw new InvalidArgumentException("strings(): minLength ($minLength) must not be negative.");
+        }
+
+        if ($maxLength < $minLength) {
+            throw new InvalidArgumentException(
+                "strings(): maxLength ($maxLength) is below minLength ($minLength).",
+            );
+        }
+
+        if ($alphabet === []) {
+            throw new InvalidArgumentException('strings(): the alphabet must not be empty.');
+        }
+
+        foreach ($alphabet as $entry) {
+            self::assertUtf8($entry, "strings(): alphabet entry '$entry'");
+
+            if (count(self::charactersOf($entry)) !== 1) {
+                throw new InvalidArgumentException(
+                    "strings(): alphabet entry '$entry' must be a single character.",
+                );
+            }
+        }
+
+        if ($origin !== null) {
+            self::assertUtf8($origin, "strings(): origin '$origin'");
+
+            $originLength = count(self::charactersOf($origin));
+            if ($originLength < $minLength || $originLength > $maxLength) {
+                throw new InvalidArgumentException(
+                    "strings(): explicit origin '$origin' is $originLength characters, outside [$minLength, $maxLength].",
+                );
+            }
+
+            foreach (self::charactersOf($origin) as $character) {
+                // D040: an origin drawn from outside the alphabet could only be reached by a
+                // special-cased jump, producing shrink candidates this generator could never have
+                // produced itself — the asymmetry the Generator contract exists to prevent.
+                if (! in_array($character, $alphabet, true)) {
+                    throw new InvalidArgumentException(
+                        "strings(): origin character '$character' is not in the alphabet.",
+                    );
+                }
+            }
+        }
+
         $this->alphabet = $alphabet;
         $this->index = new IntegersGenerator(0, count($alphabet) - 1);
 
-        $characters = $origin === null ? [] : preg_split('//u', $origin, -1, PREG_SPLIT_NO_EMPTY);
-        $this->originCharacters = $origin === null || $characters === false
-            ? array_fill(0, $minLength, $alphabet[0] ?? '')
-            : $characters;
+        $this->originCharacters = $origin === null
+            ? array_fill(0, $minLength, $alphabet[0])
+            : self::charactersOf($origin);
 
         // The deletion family's floor. With the default origin it equals $minLength, which is what
         // the implicit origin of integers() already gave, so no existing behaviour moves; with a
@@ -61,6 +107,29 @@ final class StringsGenerator implements Generator
             $maxLength,
             max($minLength, count($this->originCharacters)),
         );
+    }
+
+    /**
+     * Malformed UTF-8 is reported as such, and never as a length problem: preg_* with /u returns
+     * false on it rather than raising, so a broken alphabet would otherwise produce a generator
+     * that silently generates nothing. Telling the reader "more than one character" about a lone
+     * lead byte would send them looking for a second character that does not exist (AC10).
+     */
+    private static function assertUtf8(string $value, string $subject): void
+    {
+        if (preg_match('//u', $value) !== 1) {
+            throw new InvalidArgumentException("$subject is not valid UTF-8.");
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function charactersOf(string $value): array
+    {
+        $characters = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+
+        return $characters === false ? [] : $characters;
     }
 
     /**
@@ -158,7 +227,7 @@ final class StringsGenerator implements Generator
             $targetIndex = array_search($target, $this->alphabet, true);
             if (! is_int($targetIndex)) {
                 throw new LogicException(sprintf(
-                    'StringsGenerator::shrink(): origin character %s is not in the alphabet (AC10 will reject this at construction).',
+                    'StringsGenerator::shrink(): origin character %s is not in the alphabet.',
                     $target,
                 ));
             }
