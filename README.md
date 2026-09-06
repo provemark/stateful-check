@@ -11,8 +11,9 @@ over the same seeded, shrinking generation core.
 
 > **Status: pre-release.** The v0.1 engine is implemented and dogfooded, and is
 > tagged `v0.1.0` locally (not yet published). Since then a stateless property
-> runner (`StatelessProperty`) and opt-in edge-biased generation have been added on
-> `main`. The API may still change before 1.0.
+> runner (`StatelessProperty`), opt-in edge-biased generation, and value generators
+> for strings, floats, lists, distinct subsets and optional record keys have been
+> added on `main`. The API may still change before 1.0.
 
 ## Why
 
@@ -76,7 +77,32 @@ $result = (new StatelessProperty(
 When set, that percentage of draws are the range's boundary values — `0`, the
 minimum, the maximum — where off-by-one and degenerate-case bugs cluster and uniform
 sampling almost never lands. It composes through `map` and `associative`, so a
-command argument built on a biased integer inherits it.
+command argument built on a biased integer inherits it. It is an `integers()`
+parameter only: `floats`, `strings`, `listsOf` and `subsetOf` do not take one, so
+extending it later cannot move a seed that is already recorded.
+
+### Generating values
+
+Every generator carries its own shrink, so a failing value reduces toward a
+documented origin rather than landing in a report unshrunk:
+
+```php
+$name  = Gen::strings(1, 40, ['a', 'b', 'é', '😀']);   // lengths count characters, not bytes
+$score = Gen::floats(0.0, 1.0);                        // shrinks toward 0.0
+$tags  = Gen::subsetOf(['red', 'green', 'blue'], 0, 3); // distinct, by construction
+$items = Gen::listsOf(Gen::integers(0, 99), 1, 10);     // shortens before it simplifies
+
+$payload = Gen::associative(
+    ['id' => Gen::integers(1, 1000)],                   // always present
+    optional: ['note' => $name],                        // sometimes absent; shrinks to absent first
+);
+```
+
+The alphabet of `strings()` is required and has no default: which characters are
+interesting is the caller's decision, and a shipped default would be a promise every
+recorded seed depends on. `strings()` and `floats()` also take an `origin` — the
+value shrinking moves toward — so a counterexample can reduce to something
+meaningful, such as a schema's declared default, instead of to `'aaa'`.
 
 ## What it does not do
 
@@ -96,12 +122,20 @@ command argument built on a biased integer inherits it.
   known coverage gap, called out because it can read as a surprising counterexample
   rather than a limitation.
 - **No general-purpose generator library.** Generation is owned — seeded on PHP
-  8.2's Random extension — but only the combinators command arguments need exist
-  (`integers`, `elements`, `map`, `associative`, `constant`); there is no general
-  string or float generator. The stateless `forAll` is a base primitive, not a
+  8.2's Random extension — and covers what command arguments and schema-shaped inputs
+  need: `integers`, `floats`, `strings`, `listsOf`, `subsetOf`, `elements`, `constant`,
+  `map`, `associative` (with optional keys) and `oneOf`. It stops there on purpose.
+  There is no pattern- or format-driven string generation (no dates, e-mail addresses,
+  UUIDs); no general `uniqueItems` — `subsetOf` gives distinctness only over a finite,
+  enumerable choice set; no weighted, size-scaled or targeted distributions; and no
+  `filter`, `tuple` or `vector`. The stateless runner is a base primitive, not a
   replacement for a full property-testing toolkit — for rich stateless value
   generation, [Eris](https://github.com/giorgiosironi/eris) is the natural companion
   in PHP.
+- **Shrinking finds a local minimum per value, too.** A list reduces by removing from
+  the end and then simplifying one element at a time, and a record one key at a time,
+  so a bug that needs two elements — or two keys — reduced together stops at a minimum
+  that still contains both.
 - **No help with non-deterministic systems.** Shrinking requires a stable
   verdict. A flapping system aborts shrinking with a message rather than
   reporting a misleading counterexample.

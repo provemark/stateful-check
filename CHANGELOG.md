@@ -6,6 +6,41 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- Value generators, each with its own origin-ward shrink (SPEC-010): `Gen::strings()`,
+  `Gen::floats()`, `Gen::listsOf()`, `Gen::subsetOf()`, `Gen::oneOf()`, and optional
+  keys on `Gen::associative()`. A generator without its shrink drops an unshrinkable
+  value into a counterexample, so none of them ships without one.
+- `Gen::strings()` counts lengths in **characters (code points), not bytes**, so a
+  bound derived from a JSON Schema means what the schema says even for a non-ASCII
+  alphabet. No new runtime dependency: generation never measures a string, and
+  shrinking splits one with PCRE's Unicode support rather than `ext-mbstring`.
+- `Gen::strings()` and `Gen::floats()` take an optional `origin` — the value shrinking
+  moves toward — so a counterexample can reduce toward a meaningful value such as a
+  schema's `default` instead of the alphabet's first character.
+
+### Changed
+
+- Sequence and string shrinking now share one rule: removals take from the **end**, so
+  a shrink candidate is a prefix of the value it came from and a reader can check it by
+  eye. This diverges from fast-check, which keeps the suffix.
+- `Gen::alphabet()` is a thin delegation to the new `oneOf()`, which is the mechanism it
+  already contained. Its signature, values and shrink sequences are unchanged, proven by
+  its SPEC-003 tests passing unmodified.
+
+### Limitations worth knowing
+
+- `subsetOf()` covers distinctness over a **finite, enumerable** choice set only. It is
+  not a general `uniqueItems`: over an arbitrary item generator, uniqueness needs either
+  filtering (which breaks a declared minimum) or rejection (which breaks determinism in
+  a seeded run), and choosing between those needs its own spec.
+- Edge-biasing (`edgeBias`) is not extended to the new generators. It stays an
+  `integers()` parameter, so adding it later cannot change what an already-recorded seed
+  reproduces.
+- List and record shrinking reduce one element, and one key, at a time — a documented
+  local minimum, not a global one.
+
 ## [0.2.2] - 2026-08-04
 
 ### Added
