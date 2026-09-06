@@ -2187,3 +2187,86 @@ written), and the §4 audit corrected for the omission D032 exposed. The spec is
 the approval stamp; it is still `draft` and nothing is implemented. Next is approval, then
 tests-first implementation of thirteen acceptance criteria, then a release the MCP adapter
 can depend on — it currently pins `^0.2` and cannot see any of this.
+
+## Step 73 — SPEC-010 implemented: three amendments, two mutants, and one rule that paid off twice (2026-09-05)
+
+Twenty-five commits, thirteen acceptance criteria, 170 tests. What follows is what the
+next spec should inherit, not a restatement of the commits.
+
+### Three ACs could not be fulfilled as written, and they failed the same way
+
+AC2 promised that after the origin "the following candidates approach the origin
+monotonically". AC4 promised a walk terminating at an explicit origin while keeping a
+deletion floor of `minLength`. AC4 again — after my own amendment raised that floor —
+promised the same terminus for values *shorter* than the origin. All three are R11-(a):
+a Then no implementation can supply. All three were found while writing the test, none
+by re-reading the spec.
+
+The shared cause is worth more than the three fixes. Each clause was written from the
+**intent** of a shrink family ("it moves toward the origin") rather than from the
+**sequence** the family produces. `integers(0, 9)` shrinking 8 yields `[0, 4, 6, 7]` —
+after the origin the candidates recede from it, because the greedy loop retries less
+aggressively each time. Anyone writing "approaches the origin" has described the
+family's purpose and contradicted its output.
+
+AC4's second failure has an extra lesson: I introduced it while fixing the first. Raising
+a floor without re-reading the Given that feeds it is exactly the edit that looks local
+and is not. Amendments deserve the same R11 pass as the original.
+
+### Two mutants, one of which exposed a test that proved nothing
+
+Every criterion whose behaviour already existed (AC11, AC12, AC13) was mutation-checked
+rather than trusted, because a test that has never been red is a test that has never been
+shown to bite.
+
+The survivor is the useful one. AC11's "every candidate carries a context that permits
+further shrinking" was tested by enumerating each candidate's own candidates and
+asserting nothing throws. Emptying the recorded item contexts of a list candidate left it
+green — because such a candidate is still shrinkable, it just shrinks *less*. "Does it
+throw?" cannot detect information loss. The test now walks each generator to its true
+minimum (`0.0`, `''`, `[0]`, `['a']`, `['a' => 0]`), which strands visibly when context is
+lost, and the same mutant now dies. Generalisable: to test that something is *preserved*,
+assert on what it enables, never on the absence of an error.
+
+### One process failure, recorded because it is invisible afterwards
+
+`listsOf()`'s AC10 test and its implementation were written in the same step, so the test
+was never seen failing. The evidence was reconstructed by stashing the implementation and
+running the test alone — right reason, wrong order. It is in the commit message too,
+because a reconstructed red leaves no trace in the history otherwise, and the rule exists
+precisely because a test that silently asserts nothing looks identical to one that works.
+
+### What made the implementation cheap: no direction is written twice
+
+Every generator here delegates its *direction* to whichever generator drew the value.
+Length shrinks through the `integers()` that drew the length; a character simplifies
+through the `integers()` that drew its alphabet index; a list element reduces through the
+item generator; an optional key's absence is its presence draw shrinking to its own
+origin. Nothing in `strings`, `listsOf`, `subsetOf` or the optional-key path states
+"toward the origin" a second time.
+
+That is also what made AC8's hardest clause free. "Once the key is absent nothing re-adds
+it or repeats the record" needs no guard: `integers(0, 1)` yields `0` for a present key and
+nothing at all for an absent one, so the loop has no candidate to offer. The clause the
+necessity audit used to justify the parameter turned out to be the one the implementation
+did not have to work for.
+
+### Two smaller things worth keeping
+
+**Pin the head of a candidate list, not the whole of it.** The deletion-family tests for
+`strings` asserted the complete candidate list, which was true until the simplification
+family landed and then failed for a reason that was not a defect. Rewritten to pin the
+head plus the ordering clause, they got *stronger* (the ordering clause was untestable
+before same-length candidates existed). The list tests were written that way from the
+start and needed no adjustment.
+
+**§6's gate decides commit order, not taste.** The plan was a tests-only commit followed
+by the implementation. Impossible: chained to `composer check`, a knowingly-red commit
+cannot be made. The adjustment therefore ships with the change that caused it, which is
+also the honest grouping.
+
+### Where this leaves the package
+
+SPEC-010 is `implemented`; `Gen`'s public surface is eleven methods and nothing outside
+SPEC-003 or SPEC-010. Still open before a release: README and CHANGELOG, and the version
+decision — `stateful-check-mcp` pins `^0.2` and can see none of this.
