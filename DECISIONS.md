@@ -880,3 +880,31 @@ carries that amendment.
 Revisit if: a consumer wants an origin outside its alphabet badly enough to accept
 candidates outside the generator's range — which would need the `Generator` contract
 revisited first, not just this rule.
+
+## D041 — SPEC-010 ships as 0.3.0, cut now
+
+Spec: SPEC-010
+Status: **decided**
+Decided: maurice, 2026-09-06
+Decision: the value generators are released as **0.3.0**, and the release is cut now —
+`CHANGELOG.md`'s `[Unreleased]` becomes `[0.3.0]`, `composer.json`'s `version` field moves
+to `0.3.0`, and the tag follows in the same change. `provemark/stateful-check-mcp` moves
+its pin from `^0.2` to `^0.3` in its own repository, not here.
+Because: everything in SPEC-010 is additive — five new `Gen` methods and one optional
+parameter on `associative()` — and in a 0.x line a minor bump is the signal that the
+public surface grew. A 0.2.3 would have kept the adapter's existing pin working without
+any change there, at the price of announcing "no new API" about eleven combinators where
+there were six; 1.0.0 was rejected because the README says the API may still change
+before 1.0 and no external consumer has exercised it yet.
+Cut now rather than later, because the number, the `version` field and the tag are one
+decision enforced as one: the release guard (D009's follow-up) fails a tag that disagrees
+with `composer.json`, so splitting them across commits creates a window where CI is red
+for a reason unrelated to the code.
+Caveat (stated, not hidden): one observable behaviour changed that is not an addition.
+`AlphabetGenerator` now delegates to `OneOfGenerator`, so the `LogicException` raised on a
+malformed context names `OneOfGenerator` even for a value that entered through
+`Gen::alphabet()`. It is reachable only by a generator bug, no generated value or shrink
+sequence differs, and the stack trace still names the caller — but it is a message a
+consumer could have asserted on, and a minor bump is where such a change belongs.
+Revisit if: the MCP adapter finds the surface incomplete while building its SPEC-004. That
+would be a 0.4.0, not a patch to this one — the same rule applied again.

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-06
+
 ### Added
 
 - Value generators, each with its own origin-ward shrink (SPEC-010): `Gen::strings()`,
