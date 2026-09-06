@@ -149,6 +149,43 @@ than one, and they are small enough not to guess at:
 - README limitations section checked against what was actually built (CLAUDE.md
   §7). Anything that turned out not to work is stated plainly.
 
+## 7. After v0.1 — what has landed on `main`
+
+The order above is v0.1's build order and is now history. Three specs have been
+written and implemented since, and this section exists because a reader who opens
+`ROADMAP.md` to see where the project stands should not have to read `NOTES.md` or
+`CHANGELOG.md` to find out.
+
+- **SPEC-008 — stateless property runner.** Implemented 2026-08-03, released in
+  **0.2.0**. Reverses D013, which had ruled the stateless layer out of v0.1: the
+  generation core turned out to carry it with no new machinery. `StatelessProperty`
+  is constructor + `check()`, not a `forAll` facade (D028).
+- **SPEC-009 — edge-biased generation.** Implemented 2026-08-03, released in
+  **0.2.0**. Opt-in and off by default (D029), at a measured 10% (D030), so no
+  recorded seed moves unless the caller asks for it.
+- **SPEC-010 — value generators.** Implemented 2026-09-06, released in **0.3.0**
+  (D041). `strings`, `floats`, `listsOf`, `subsetOf`, `oneOf` and optional keys on
+  `associative`, each with its own origin-ward shrink — D024's condition for a string
+  generator finally met, with `provemark/stateful-check-mcp` as the named consumer.
+
+Three of its acceptance criteria were amended during implementation, each because a
+criterion described a shrink family's intent rather than the sequence it produces
+(R11-(a)). NOTES step 73 records the pattern; it is the thing to check first when
+writing the next spec's ACs.
+
+## What is next, and what it waits on
+
+- **`stateful-check-mcp` SPEC-004** — the named consumer of SPEC-010. It pins `^0.2`
+  and must move to `^0.3` before it can use any of this. Its AC13 carries the
+  amendment D040 forced: an explicit shrink origin must be drawn from the alphabet,
+  so a derived generator unions the schema `default`'s characters into the alphabet
+  it passes, and records that union in its report.
+- **Edge-biasing for the new generators** — deferred by D039, safe to defer because
+  bias is opt-in by construction. It needs its own measurement in D030's shape, not
+  just plumbing.
+- **SPEC-004 (this repo), the optional Eris adapter** — still recorded, still
+  unscheduled.
+
 ## Deliberately not in v0.1
 
 - SPEC-004, the optional Eris adapter. Recorded, unscheduled.
